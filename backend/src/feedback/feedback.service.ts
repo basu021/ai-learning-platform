@@ -1,10 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { GamificationService } from '../gamification/gamification.service';
 import { CreateFeedbackDto } from './dto/create-feedback.dto';
 
 @Injectable()
 export class FeedbackService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private gamification: GamificationService,
+  ) {}
 
   async create(userId: string, dto: CreateFeedbackDto) {
     const feedback = await this.prisma.feedback.create({
@@ -15,6 +19,19 @@ export class FeedbackService {
       where: { id: dto.taskId },
       data: { status: 'completed' },
     });
+
+    const task = await this.prisma.task.findUnique({
+      where: { id: dto.taskId },
+    });
+    if (task?.xpReward) {
+      await this.gamification.awardXp(
+        userId,
+        task.xpReward,
+        'task_completion',
+        task.id,
+      );
+    }
+    await this.gamification.updateStreak(userId);
 
     await this.updateLearningProgress(userId, dto.taskId, dto.confidenceLevel);
 
