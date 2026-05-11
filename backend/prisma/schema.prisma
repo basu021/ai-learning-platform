@@ -1,0 +1,329 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  passwordHash  String?  @map("password_hash")
+  name          String
+  avatar        String?
+  provider      String   @default("local") // local, google
+  providerId    String?  @map("provider_id")
+  emailVerified Boolean  @default(false) @map("email_verified")
+  refreshToken  String?  @db.Text @map("refresh_token")
+  level         Int      @default(1)
+  totalXp       Int      @default(0) @map("total_xp")
+  dailyTaskCount Int     @default(5) @map("daily_task_count")
+  dailyHours    Float    @default(2.0) @map("daily_hours")
+  difficulty    String   @default("beginner") // beginner, intermediate, advanced, expert
+  revisionFreq  Int      @default(3) @map("revision_freq")
+  repInterval   Int      @default(7) @map("rep_interval")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+
+  subjects         Subject[]
+  tasks            Task[]
+  taskSessions     TaskSession[]
+  feedback         Feedback[]
+  dailyTaskQueues  DailyTaskQueue[]
+  streaks          Streak[]
+  achievements     UserAchievement[]
+  xpHistory        XpHistory[]
+  revisionHistory  RevisionHistory[]
+  learningProgress LearningProgress[]
+  notifications    Notification[]
+
+  @@map("users")
+}
+
+model Subject {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  name        String
+  description String?  @db.Text
+  icon        String?
+  color       String?  @default("#6366f1")
+  order       Int      @default(0)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topics Topic[]
+
+  @@index([userId])
+  @@map("subjects")
+}
+
+model Topic {
+  id          String   @id @default(uuid())
+  subjectId   String   @map("subject_id")
+  name        String
+  description String?  @db.Text
+  icon        String?
+  order       Int      @default(0)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  subject   Subject    @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  subtopics Subtopic[]
+
+  @@index([subjectId])
+  @@map("topics")
+}
+
+model Subtopic {
+  id          String   @id @default(uuid())
+  topicId     String   @map("topic_id")
+  name        String
+  description String?  @db.Text
+  icon        String?
+  order       Int      @default(0)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  topic            Topic             @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  tasks            Task[]
+  learningProgress LearningProgress[]
+
+  @@index([topicId])
+  @@map("subtopics")
+}
+
+model Task {
+  id            String   @id @default(uuid())
+  subtopicId    String   @map("subtopic_id")
+  userId        String   @map("user_id")
+  title         String
+  description   String   @db.Text
+  difficulty    String   @default("beginner") // beginner, intermediate, advanced, expert
+  taskType      String   @default("practice") @map("task_type") // practice, troubleshooting, scenario, revision
+  status        String   @default("pending") // pending, started, in_progress, completed, skipped, revision_required
+  priority      Int      @default(0)
+  estimatedMins Int?     @map("estimated_mins")
+  xpReward      Int      @default(10) @map("xp_reward")
+  isRevision    Boolean  @default(false) @map("is_revision")
+  aiGenerated   Boolean  @default(true) @map("ai_generated")
+  aiModel       String?  @map("ai_model")
+  aiPrompt      String?  @db.Text @map("ai_prompt")
+  hints         String?  @db.Text // JSON array of hints
+  commands      String?  @db.Text // JSON array of relevant commands
+  tags          String?  @db.Text // JSON array of tags
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+
+  subtopic       Subtopic        @relation(fields: [subtopicId], references: [id], onDelete: Cascade)
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskSessions   TaskSession[]
+  feedback       Feedback[]
+  dailyTaskQueue DailyTaskQueue[]
+  aiGenerations  AiGeneration[]
+  revisionHistory RevisionHistory[]
+
+  @@index([subtopicId])
+  @@index([userId])
+  @@index([status])
+  @@map("tasks")
+}
+
+model TaskSession {
+  id          String    @id @default(uuid())
+  taskId      String    @map("task_id")
+  userId      String    @map("user_id")
+  startedAt   DateTime  @default(now()) @map("started_at")
+  finishedAt  DateTime? @map("finished_at")
+  duration    Int?      // seconds
+  status      String    @default("active") // active, paused, completed, abandoned
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@index([userId])
+  @@map("task_sessions")
+}
+
+model Feedback {
+  id              String   @id @default(uuid())
+  taskId          String   @map("task_id")
+  userId          String   @map("user_id")
+  whatWasDone     String?  @db.Text @map("what_was_done")
+  problemsFaced   String?  @db.Text @map("problems_faced")
+  commandsUsed    String?  @db.Text @map("commands_used")
+  confidenceLevel Int      @default(3) @map("confidence_level") // 1-5
+  needsImprovement String? @db.Text @map("needs_improvement")
+  notesForTomorrow String? @db.Text @map("notes_for_tomorrow")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@index([userId])
+  @@map("feedback")
+}
+
+model AiGeneration {
+  id           String   @id @default(uuid())
+  taskId       String?  @map("task_id")
+  provider     String   // openai, gemini, claude, ollama
+  model        String
+  prompt       String   @db.Text
+  response     String   @db.LongText
+  tokensUsed   Int?     @map("tokens_used")
+  latencyMs    Int?     @map("latency_ms")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  task Task? @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([taskId])
+  @@map("ai_generations")
+}
+
+model DailyTaskQueue {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  taskId      String   @map("task_id")
+  scheduledAt DateTime @map("scheduled_at")
+  position    Int      @default(0)
+  completed   Boolean  @default(false)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([userId, scheduledAt])
+  @@index([taskId])
+  @@map("daily_task_queue")
+}
+
+model Streak {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  type         String   @default("daily") // daily, subject
+  subjectName  String?  @map("subject_name")
+  currentCount Int      @default(0) @map("current_count")
+  longestCount Int      @default(0) @map("longest_count")
+  lastActiveAt DateTime @default(now()) @map("last_active_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, type, subjectName])
+  @@index([userId])
+  @@map("streaks")
+}
+
+model Achievement {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String   @db.Text
+  icon        String?
+  category    String   // streak, mastery, completion, special
+  xpReward    Int      @default(0) @map("xp_reward")
+  condition   String   @db.Text // JSON condition definition
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  users UserAchievement[]
+
+  @@map("achievements")
+}
+
+model UserAchievement {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  achievementId String   @map("achievement_id")
+  unlockedAt    DateTime @default(now()) @map("unlocked_at")
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, achievementId])
+  @@index([userId])
+  @@map("user_achievements")
+}
+
+model XpHistory {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  amount    Int
+  source    String   // task_completion, achievement, streak_bonus, daily_quest
+  sourceId  String?  @map("source_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("xp_history")
+}
+
+model RevisionHistory {
+  id             String   @id @default(uuid())
+  userId         String   @map("user_id")
+  taskId         String   @map("task_id")
+  revisionNumber Int      @map("revision_number")
+  scheduledFor   DateTime @map("scheduled_for")
+  completedAt    DateTime? @map("completed_at")
+  quality        Int?     // 1-5 rating of how well they did
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([userId, scheduledFor])
+  @@index([taskId])
+  @@map("revision_history")
+}
+
+model LearningProgress {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  subtopicId    String   @map("subtopic_id")
+  mastery       Float    @default(0) // 0-100
+  tasksCompleted Int     @default(0) @map("tasks_completed")
+  tasksFailed   Int      @default(0) @map("tasks_failed")
+  avgConfidence Float    @default(0) @map("avg_confidence")
+  avgTimeSpent  Float    @default(0) @map("avg_time_spent")
+  weakAreas     String?  @db.Text @map("weak_areas") // JSON array
+  lastPracticedAt DateTime? @map("last_practiced_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subtopic Subtopic @relation(fields: [subtopicId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, subtopicId])
+  @@index([userId])
+  @@map("learning_progress")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  title     String
+  message   String   @db.Text
+  type      String   // achievement, streak, reminder, system
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+  @@map("notifications")
+}
