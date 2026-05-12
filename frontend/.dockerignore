@@ -1,0 +1,5 @@
+node_modules
+.next
+build-log.txt
+npm-debug.log*
+.DS_Store
