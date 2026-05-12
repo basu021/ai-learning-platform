@@ -14,6 +14,7 @@ model User {
   avatar        String?
   provider      String   @default("local") // local, google
   providerId    String?  @map("provider_id")
+  role          String   @default("user") // user, admin
   emailVerified Boolean  @default(false) @map("email_verified")
   refreshToken  String?  @db.Text @map("refresh_token")
   level         Int      @default(1)
@@ -326,4 +327,33 @@ model Notification {
 
   @@index([userId, read])
   @@map("notifications")
+}
+
+model SiteConfig {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String   @db.Text
+  encrypted Boolean  @default(false)
+  category  String   @default("general") // general, smtp, ai, auth, app
+  label     String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([category])
+  @@map("site_config")
+}
+
+model EmailLog {
+  id         String   @id @default(uuid())
+  to         String
+  subject    String
+  status     String   @default("pending") // pending, sent, failed
+  error      String?  @db.Text
+  templateId String?  @map("template_id")
+  metadata   String?  @db.Text // JSON
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([status])
+  @@index([createdAt])
+  @@map("email_logs")
 }
