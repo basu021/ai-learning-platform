@@ -96,6 +96,7 @@ export const authApi = {
       id: string;
       email: string;
       name: string;
+      role: string;
       level: number;
       totalXp: number;
       dailyTaskCount: number;
@@ -164,6 +165,24 @@ export const gamificationApi = {
 
 export const schedulerApi = {
   generateDaily: () => api("/api/scheduler/generate-daily", { method: "POST" }),
+};
+
+export const configApi = {
+  getAll: () => api<SiteConfigData[]>("/api/admin/config"),
+  getByCategory: (category: string) =>
+    api<SiteConfigData[]>(`/api/admin/config/category/${category}`),
+  upsert: (data: { key: string; value: string; category?: string; label?: string; encrypted?: boolean }) =>
+    api<SiteConfigData>("/api/admin/config", { method: "PUT", body: data }),
+  bulkUpsert: (configs: Array<{ key: string; value: string; category?: string; label?: string; encrypted?: boolean }>) =>
+    api("/api/admin/config/bulk", { method: "PUT", body: { configs } }),
+  delete: (key: string) =>
+    api(`/api/admin/config/${key}`, { method: "DELETE" }),
+  testSmtp: (to: string) =>
+    api<{ success: boolean; messageId?: string }>("/api/admin/config/smtp/test", { method: "POST", body: { to } }),
+  getEmailLogs: (page?: number, limit?: number) =>
+    api<EmailLogsResponse>(`/api/admin/config/email-logs?page=${page || 1}&limit=${limit || 50}`),
+  promoteToAdmin: (setupKey: string) =>
+    api<{ id: string; email: string; name: string; role: string }>("/api/admin/config/promote", { method: "POST", body: { setupKey } }),
 };
 
 // Types
@@ -332,4 +351,30 @@ export interface HeatmapEntry {
   date: string;
   count: number;
   duration: number;
+}
+
+export interface SiteConfigData {
+  id: string;
+  key: string;
+  value: string;
+  encrypted: boolean;
+  category: string;
+  label: string | null;
+}
+
+export interface EmailLogData {
+  id: string;
+  to: string;
+  subject: string;
+  status: string;
+  error: string | null;
+  templateId: string | null;
+  createdAt: string;
+}
+
+export interface EmailLogsResponse {
+  logs: EmailLogData[];
+  total: number;
+  page: number;
+  limit: number;
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -11,7 +12,9 @@ import {
   Settings,
   Zap,
   Brain,
+  ShieldCheck,
 } from "lucide-react";
+import { authApi } from "@/lib/api";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -20,8 +23,19 @@ const navItems = [
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
+const adminNavItems = [
+  { href: "/admin/config", label: "Configuration", icon: ShieldCheck },
+];
+
 export function Sidebar() {
   const pathname = usePathname();
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    authApi.profile().then((data) => {
+      setIsAdmin(data.role === "admin");
+    }).catch(() => {});
+  }, []);
 
   return (
     <aside className="fixed left-0 top-0 z-40 h-screen w-64 border-r border-gray-800 bg-gray-950/80 backdrop-blur-xl">
@@ -62,6 +76,34 @@ export function Sidebar() {
               </Link>
             );
           })}
+
+          {isAdmin && (
+            <>
+              <div className="my-3 border-t border-gray-800" />
+              <p className="px-3 py-1 text-[10px] text-gray-600 uppercase tracking-widest font-semibold">Admin</p>
+              {adminNavItems.map((item) => {
+                const isActive = pathname.startsWith(item.href);
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
+                      isActive
+                        ? "bg-amber-500/15 text-amber-400 shadow-sm"
+                        : "text-gray-400 hover:text-gray-200 hover:bg-gray-800/50",
+                    )}
+                  >
+                    <item.icon className={cn("h-4.5 w-4.5", isActive && "text-amber-400")} />
+                    {item.label}
+                    {isActive && (
+                      <div className="ml-auto h-1.5 w-1.5 rounded-full bg-amber-400" />
+                    )}
+                  </Link>
+                );
+              })}
+            </>
+          )}
         </nav>
 
         <div className="p-4 mx-3 mb-4 rounded-xl bg-gradient-to-br from-indigo-900/40 to-purple-900/40 border border-indigo-500/20">

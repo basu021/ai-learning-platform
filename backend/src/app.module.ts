@@ -11,6 +11,8 @@ import { AiModule } from './ai/ai.module';
 import { GamificationModule } from './gamification/gamification.module';
 import { SchedulerModule } from './scheduler/scheduler.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { MailModule } from './mail/mail.module';
+import { ConfigAdminModule } from './config-admin/config-admin.module';
 
 @Module({
   imports: [
@@ -26,6 +28,8 @@ import { DashboardModule } from './dashboard/dashboard.module';
     GamificationModule,
     SchedulerModule,
     DashboardModule,
+    MailModule,
+    ConfigAdminModule,
   ],
 })
 export class AppModule {}
