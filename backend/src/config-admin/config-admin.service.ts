@@ -12,7 +12,7 @@ const SENSITIVE_KEYS = [
   'JWT_SECRET',
 ];
 
-interface SiteConfigRecord {
+export interface SiteConfigRecord {
   id: string;
   key: string;
   value: string;
