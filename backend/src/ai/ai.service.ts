@@ -27,8 +27,8 @@ export class AiService {
     subtopicId: string,
     count = 5,
   ): Promise<GeneratedTask[]> {
-    const subtopic = await this.prisma.subtopic.findUnique({
-      where: { id: subtopicId },
+    const subtopic = await this.prisma.subtopic.findFirst({
+      where: { id: subtopicId, deletedAt: null, topic: { subject: { userId } } },
       include: { topic: { include: { subject: true } } },
     });
     if (!subtopic) throw new Error('Subtopic not found');
@@ -105,8 +105,8 @@ export class AiService {
     userId: string,
     taskId: string,
   ): Promise<FeedbackAnalysis> {
-    const task = await this.prisma.task.findUnique({
-      where: { id: taskId },
+    const task = await this.prisma.task.findFirst({
+      where: { id: taskId, userId },
       include: { subtopic: true },
     });
     if (!task) throw new Error('Task not found');

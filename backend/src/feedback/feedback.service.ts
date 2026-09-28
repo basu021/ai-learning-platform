@@ -15,32 +15,36 @@ export class FeedbackService {
       data: { ...dto, userId },
     });
 
-    await this.prisma.task.update({
-      where: { id: dto.taskId },
+    // Atomically flip status so concurrent/duplicate submissions can't
+    // each observe "not completed yet" and double-award XP.
+    const { count } = await this.prisma.task.updateMany({
+      where: { id: dto.taskId, userId, status: { not: 'completed' } },
       data: { status: 'completed' },
     });
 
-    const task = await this.prisma.task.findUnique({
-      where: { id: dto.taskId },
-    });
-    if (task?.xpReward) {
-      await this.gamification.awardXp(
-        userId,
-        task.xpReward,
-        'task_completion',
-        task.id,
-      );
+    if (count > 0) {
+      const task = await this.prisma.task.findUnique({
+        where: { id: dto.taskId },
+      });
+      if (task?.xpReward) {
+        await this.gamification.awardXp(
+          userId,
+          task.xpReward,
+          'task_completion',
+          task.id,
+        );
+      }
+      await this.gamification.updateStreak(userId);
     }
-    await this.gamification.updateStreak(userId);
 
     await this.updateLearningProgress(userId, dto.taskId, dto.confidenceLevel);
 
     return feedback;
   }
 
-  async findByTask(taskId: string) {
+  async findByTask(taskId: string, userId: string) {
     return this.prisma.feedback.findMany({
-      where: { taskId },
+      where: { taskId, userId },
       orderBy: { createdAt: 'desc' },
     });
   }

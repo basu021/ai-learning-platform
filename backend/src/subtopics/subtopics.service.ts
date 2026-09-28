@@ -9,14 +9,16 @@ import {
 export class SubtopicsService {
   constructor(private prisma: PrismaService) {}
 
-  async create(dto: CreateSubtopicDto) {
+  async create(userId: string, dto: CreateSubtopicDto) {
+    await this.verifyTopicOwnership(dto.topicId, userId);
     return this.prisma.subtopic.create({
       data: dto,
       include: { topic: true },
     });
   }
 
-  async findByTopic(topicId: string) {
+  async findByTopic(topicId: string, userId: string) {
+    await this.verifyTopicOwnership(topicId, userId);
     return this.prisma.subtopic.findMany({
       where: { topicId, deletedAt: null },
       include: { _count: { select: { tasks: true } } },
@@ -24,9 +26,9 @@ export class SubtopicsService {
     });
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, userId: string) {
     const subtopic = await this.prisma.subtopic.findFirst({
-      where: { id, deletedAt: null },
+      where: { id, deletedAt: null, topic: { subject: { userId } } },
       include: {
         topic: { include: { subject: true } },
         tasks: {
@@ -40,16 +42,23 @@ export class SubtopicsService {
     return subtopic;
   }
 
-  async update(id: string, dto: UpdateSubtopicDto) {
-    await this.findOne(id);
+  async update(id: string, userId: string, dto: UpdateSubtopicDto) {
+    await this.findOne(id, userId);
     return this.prisma.subtopic.update({ where: { id }, data: dto });
   }
 
-  async remove(id: string) {
-    await this.findOne(id);
+  async remove(id: string, userId: string) {
+    await this.findOne(id, userId);
     return this.prisma.subtopic.update({
       where: { id },
       data: { deletedAt: new Date() },
     });
+  }
+
+  private async verifyTopicOwnership(topicId: string, userId: string) {
+    const topic = await this.prisma.topic.findFirst({
+      where: { id: topicId, deletedAt: null, subject: { userId } },
+    });
+    if (!topic) throw new NotFoundException('Topic not found');
   }
 }

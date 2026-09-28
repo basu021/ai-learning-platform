@@ -51,7 +51,7 @@ export class AuthController {
       'http://localhost:3000',
     );
     res.redirect(
-      `${frontendUrl}/auth/callback?accessToken=${tokens.accessToken}&refreshToken=${tokens.refreshToken}`,
+      `${frontendUrl}/auth/callback?accessToken=${tokens.accessToken}&refreshToken=${tokens.refreshToken}&userId=${user.id}`,
     );
   }
 

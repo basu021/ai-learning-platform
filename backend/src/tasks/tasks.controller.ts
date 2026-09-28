@@ -46,13 +46,17 @@ export class TasksController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.tasksService.findOne(id);
+  findOne(@Param('id') id: string, @CurrentUser('id') userId: string) {
+    return this.tasksService.findOne(id, userId);
   }
 
   @Put(':id/status')
-  updateStatus(@Param('id') id: string, @Body() dto: UpdateTaskStatusDto) {
-    return this.tasksService.updateStatus(id, dto);
+  updateStatus(
+    @Param('id') id: string,
+    @CurrentUser('id') userId: string,
+    @Body() dto: UpdateTaskStatusDto,
+  ) {
+    return this.tasksService.updateStatus(id, userId, dto);
   }
 
   @Post(':id/start')
@@ -61,12 +65,15 @@ export class TasksController {
   }
 
   @Post('session/:sessionId/finish')
-  finishSession(@Param('sessionId') sessionId: string) {
-    return this.tasksService.finishSession(sessionId);
+  finishSession(
+    @Param('sessionId') sessionId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.tasksService.finishSession(sessionId, userId);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.tasksService.remove(id);
+  remove(@Param('id') id: string, @CurrentUser('id') userId: string) {
+    return this.tasksService.remove(id, userId);
   }
 }
