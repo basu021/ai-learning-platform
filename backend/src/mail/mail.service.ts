@@ -154,7 +154,7 @@ export class MailService {
           <h2 style="color: #e2e8f0;">Welcome, ${name}!</h2>
           <p style="color: #94a3b8; line-height: 1.6;">Your account has been created successfully. Start your learning journey by exploring subjects and generating AI-powered practice tasks.</p>
           <div style="text-align: center; margin: 30px 0;">
-            <a href="${this.configService.get('FRONTEND_URL', 'http://localhost:3000')}/dashboard" style="background: linear-gradient(to right, #6366f1, #8b5cf6); color: white; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 600;">Go to Dashboard</a>
+            <a href="${this.frontendUrl()}/dashboard" style="background: linear-gradient(to right, #6366f1, #8b5cf6); color: white; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 600;">Go to Dashboard</a>
           </div>
           <p style="color: #64748b; font-size: 12px; text-align: center;">SkillForge — AI-Powered Technical Training</p>
         </div>
@@ -175,7 +175,7 @@ export class MailService {
           <h2 style="color: #e2e8f0;">Hey ${name}, time to practice!</h2>
           <p style="color: #94a3b8; line-height: 1.6;">You have <strong style="color: #818cf8;">${pendingCount}</strong> pending tasks in your daily queue. Keep your streak alive!</p>
           <div style="text-align: center; margin: 30px 0;">
-            <a href="${this.configService.get('FRONTEND_URL', 'http://localhost:3000')}/tasks" style="background: linear-gradient(to right, #6366f1, #8b5cf6); color: white; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 600;">View Tasks</a>
+            <a href="${this.frontendUrl()}/tasks" style="background: linear-gradient(to right, #6366f1, #8b5cf6); color: white; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 600;">View Tasks</a>
           </div>
           <p style="color: #64748b; font-size: 12px; text-align: center;">SkillForge — AI-Powered Technical Training</p>
         </div>
@@ -204,7 +204,7 @@ export class MailService {
           </div>
           <p style="color: #94a3b8; line-height: 1.6; text-align: center;">Your consistency is paying off. Keep up the momentum!</p>
           <div style="text-align: center; margin: 30px 0;">
-            <a href="${this.configService.get('FRONTEND_URL', 'http://localhost:3000')}/dashboard" style="background: linear-gradient(to right, #6366f1, #8b5cf6); color: white; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 600;">Continue Learning</a>
+            <a href="${this.frontendUrl()}/dashboard" style="background: linear-gradient(to right, #6366f1, #8b5cf6); color: white; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 600;">Continue Learning</a>
           </div>
           <p style="color: #64748b; font-size: 12px; text-align: center;">SkillForge — AI-Powered Technical Training</p>
         </div>
@@ -228,5 +228,13 @@ export class MailService {
         </div>
       `,
     });
+  }
+
+  private frontendUrl(): string {
+    return this.configService
+      .get<string>('FRONTEND_URL', 'http://localhost:3000')
+      .split(',')[0]
+      .trim()
+      .replace(/\/$/, '');
   }
 }

@@ -2,7 +2,7 @@
 set -e
 
 echo "Syncing database schema with Prisma..."
-npx prisma db push --accept-data-loss
+npx prisma db push
 
 echo "Starting application..."
 exec "$@"

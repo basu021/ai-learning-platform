@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -40,8 +40,8 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive" | "
 };
 
 export default function AdminUserDetailPage() {
-  const params = useParams<{ id: string }>();
   const router = useRouter();
+  const [id, setId] = useState("");
   const [data, setData] = useState<AdminUserOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -49,9 +49,14 @@ export default function AdminUserDetailPage() {
   const [expandedTopics, setExpandedTopics] = useState<Set<string>>(new Set());
   const [expandedSubtopics, setExpandedSubtopics] = useState<Set<string>>(new Set());
 
+  useEffect(() => {
+    setId(new URLSearchParams(window.location.search).get("id") || "");
+  }, []);
+
   const load = useCallback(() => {
-    adminApi.getUser(params.id).then(setData).catch(() => {});
-  }, [params.id]);
+    if (!id) return;
+    adminApi.getUser(id).then(setData).catch(() => {});
+  }, [id]);
 
   useEffect(() => {
     authApi

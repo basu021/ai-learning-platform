@@ -104,7 +104,7 @@ export default function TasksPage() {
                         )}
                       </div>
                     </div>
-                    <Link href={`/tasks/${task.id}`}>
+                    <Link href={`/tasks/view?id=${encodeURIComponent(task.id)}`}>
                       <Button
                         size="sm"
                         variant="ghost"

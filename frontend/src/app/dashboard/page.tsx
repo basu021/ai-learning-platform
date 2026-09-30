@@ -199,7 +199,7 @@ export default function DashboardPage() {
                       </div>
                       <Badge className={getStatusColor(item.task.status)}>{item.task.status}</Badge>
                       {!item.completed && (
-                        <Link href={`/tasks/${item.task.id}`}>
+                        <Link href={`/tasks/view?id=${encodeURIComponent(item.task.id)}`}>
                           <Button size="sm" variant="ghost" className="opacity-0 group-hover:opacity-100 transition-opacity">
                             <Play className="h-3 w-3" />
                           </Button>

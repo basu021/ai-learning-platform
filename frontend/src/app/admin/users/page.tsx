@@ -192,7 +192,7 @@ export default function AdminUsersPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.03 }}
             >
-              <Link href={`/admin/users/${u.id}`}>
+              <Link href={`/admin/users/view?id=${encodeURIComponent(u.id)}`}>
                 <Card className="hover:border-indigo-500/40 transition-colors cursor-pointer">
                   <CardContent className="p-4 flex items-center justify-between gap-4">
                     <div className="flex items-center gap-3 min-w-0">

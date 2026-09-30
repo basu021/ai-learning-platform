@@ -14,6 +14,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
 import { MailModule } from './mail/mail.module';
 import { ConfigAdminModule } from './config-admin/config-admin.module';
 import { AdminManagementModule } from './admin-management/admin-management.module';
+import { HealthController } from './health.controller';
 
 @Module({
   imports: [
@@ -33,5 +34,6 @@ import { AdminManagementModule } from './admin-management/admin-management.modul
     ConfigAdminModule,
     AdminManagementModule,
   ],
+  controllers: [HealthController],
 })
 export class AppModule {}
