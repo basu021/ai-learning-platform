@@ -13,6 +13,9 @@ import {
   Zap,
   Brain,
   ShieldCheck,
+  Users,
+  ClipboardList,
+  SendHorizonal,
 } from "lucide-react";
 import { authApi } from "@/lib/api";
 
@@ -24,6 +27,9 @@ const navItems = [
 ];
 
 const adminNavItems = [
+  { href: "/admin/users", label: "Users", icon: Users },
+  { href: "/admin/assign", label: "Assign Work", icon: SendHorizonal },
+  { href: "/admin/assignments", label: "Assignments", icon: ClipboardList },
   { href: "/admin/config", label: "Configuration", icon: ShieldCheck },
 ];
 

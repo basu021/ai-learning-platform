@@ -1,7 +1,7 @@
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
 
-export default function AdminConfigLayout({
+export default function AdminLayout({
   children,
 }: {
   children: React.ReactNode;

@@ -13,6 +13,7 @@ import { SchedulerModule } from './scheduler/scheduler.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { MailModule } from './mail/mail.module';
 import { ConfigAdminModule } from './config-admin/config-admin.module';
+import { AdminManagementModule } from './admin-management/admin-management.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { ConfigAdminModule } from './config-admin/config-admin.module';
     DashboardModule,
     MailModule,
     ConfigAdminModule,
+    AdminManagementModule,
   ],
 })
 export class AppModule {}

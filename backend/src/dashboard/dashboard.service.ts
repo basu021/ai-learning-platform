@@ -1,11 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { resetDueRepeatableTasks } from '../common/task-recurrence';
 
 @Injectable()
 export class DashboardService {
   constructor(private prisma: PrismaService) {}
 
   async getDashboard(userId: string) {
+    await resetDueRepeatableTasks(this.prisma, userId);
     const [
       todaysTasks,
       subjectProgress,

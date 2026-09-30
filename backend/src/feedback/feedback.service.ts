@@ -19,7 +19,11 @@ export class FeedbackService {
     // each observe "not completed yet" and double-award XP.
     const { count } = await this.prisma.task.updateMany({
       where: { id: dto.taskId, userId, status: { not: 'completed' } },
-      data: { status: 'completed' },
+      data: {
+        status: 'completed',
+        completedAt: new Date(),
+        timesCompleted: { increment: 1 },
+      },
     });
 
     if (count > 0) {

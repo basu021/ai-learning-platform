@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { resetDueRepeatableTasks } from '../common/task-recurrence';
 import { CreateTaskDto, UpdateTaskStatusDto } from './dto/create-task.dto';
 
 @Injectable()
@@ -29,6 +30,7 @@ export class TasksService {
   }
 
   async findOne(id: string, userId: string) {
+    await resetDueRepeatableTasks(this.prisma, userId);
     const task = await this.prisma.task.findFirst({
       where: { id, userId, deletedAt: null },
       include: {
@@ -43,9 +45,16 @@ export class TasksService {
 
   async updateStatus(id: string, userId: string, dto: UpdateTaskStatusDto) {
     const task = await this.findOne(id, userId);
+    const enteringCompleted =
+      dto.status === 'completed' && task.status !== 'completed';
     return this.prisma.task.update({
       where: { id: task.id },
-      data: { status: dto.status },
+      data: {
+        status: dto.status,
+        ...(enteringCompleted
+          ? { completedAt: new Date(), timesCompleted: { increment: 1 } }
+          : {}),
+      },
     });
   }
 
@@ -78,6 +87,7 @@ export class TasksService {
   }
 
   async getTodaysTasks(userId: string) {
+    await resetDueRepeatableTasks(this.prisma, userId);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
@@ -100,6 +110,7 @@ export class TasksService {
   }
 
   async getUserTasks(userId: string, status?: string) {
+    await resetDueRepeatableTasks(this.prisma, userId);
     const where: Record<string, unknown> = { userId, deletedAt: null };
     if (status) where.status = status;
     return this.prisma.task.findMany({

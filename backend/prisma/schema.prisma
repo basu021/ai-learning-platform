@@ -51,6 +51,7 @@ model Subject {
   icon        String?
   color       String?  @default("#6366f1")
   order       Int      @default(0)
+  assignedBy  String?  @map("assigned_by")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
   deletedAt   DateTime? @map("deleted_at")
@@ -69,6 +70,7 @@ model Topic {
   description String?  @db.Text
   icon        String?
   order       Int      @default(0)
+  assignedBy  String?  @map("assigned_by")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
   deletedAt   DateTime? @map("deleted_at")
@@ -87,6 +89,7 @@ model Subtopic {
   description String?  @db.Text
   icon        String?
   order       Int      @default(0)
+  assignedBy  String?  @map("assigned_by")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
   deletedAt   DateTime? @map("deleted_at")
@@ -118,6 +121,11 @@ model Task {
   hints         String?  @db.Text // JSON array of hints
   commands      String?  @db.Text // JSON array of relevant commands
   tags          String?  @db.Text // JSON array of tags
+  assignedBy    String?  @map("assigned_by")
+  assignmentGroupId String? @map("assignment_group_id")
+  repeatIntervalHours Int?  @map("repeat_interval_hours") // null = one-time; otherwise re-opens this many hours after completion
+  completedAt   DateTime? @map("completed_at")
+  timesCompleted Int     @default(0) @map("times_completed")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
   deletedAt     DateTime? @map("deleted_at")
@@ -133,6 +141,7 @@ model Task {
   @@index([subtopicId])
   @@index([userId])
   @@index([status])
+  @@index([assignmentGroupId])
   @@map("tasks")
 }
 

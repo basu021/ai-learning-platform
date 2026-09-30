@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { tasksApi, feedbackApi, aiApi } from "@/lib/api";
 import type { TaskData } from "@/lib/api";
-import { getStatusColor, getDifficultyColor, formatDuration } from "@/lib/utils";
+import { getStatusColor, getDifficultyColor, formatDuration, formatRepeatInterval } from "@/lib/utils";
 import Link from "next/link";
 
 export default function TaskDetailPage({
@@ -166,6 +166,12 @@ export default function TaskDetailPage({
                 </span>
                 <Badge variant="secondary">{task.taskType}</Badge>
                 {task.isRevision && <Badge variant="warning">Revision</Badge>}
+                {formatRepeatInterval(task.repeatIntervalHours) && (
+                  <Badge variant="outline">
+                    &#8635; Repeats {formatRepeatInterval(task.repeatIntervalHours)}
+                    {task.timesCompleted > 0 && ` · done ${task.timesCompleted}x`}
+                  </Badge>
+                )}
               </div>
               <CardTitle className="text-xl">{task.title}</CardTitle>
               {task.subtopic && (
