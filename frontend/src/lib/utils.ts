@@ -51,3 +51,20 @@ export function getStatusColor(status: string): string {
   };
   return colors[status] || "bg-gray-500/20 text-gray-400";
 }
+
+export const REPEAT_INTERVAL_OPTIONS: Array<{ label: string; hours: number }> = [
+  { label: "One-time (no repeat)", hours: 0 },
+  { label: "Every 24 hours", hours: 24 },
+  { label: "Every 3 days", hours: 72 },
+  { label: "Every 7 days", hours: 168 },
+  { label: "Every 15 days", hours: 360 },
+  { label: "Every 1 month", hours: 720 },
+];
+
+export function formatRepeatInterval(hours: number | null | undefined): string | null {
+  if (!hours) return null;
+  const match = REPEAT_INTERVAL_OPTIONS.find((o) => o.hours === hours);
+  if (match) return match.label.replace("Every ", "");
+  if (hours % 24 === 0) return `${hours / 24}d`;
+  return `${hours}h`;
+}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, use } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,15 +22,11 @@ import {
 } from "lucide-react";
 import { tasksApi, feedbackApi, aiApi } from "@/lib/api";
 import type { TaskData } from "@/lib/api";
-import { getStatusColor, getDifficultyColor, formatDuration } from "@/lib/utils";
+import { getStatusColor, getDifficultyColor, formatDuration, formatRepeatInterval } from "@/lib/utils";
 import Link from "next/link";
 
-export default function TaskDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const { id } = use(params);
+export default function TaskDetailPage() {
+  const [id, setId] = useState("");
   const [task, setTask] = useState<TaskData | null>(null);
   const [loading, setLoading] = useState(true);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -48,7 +44,12 @@ export default function TaskDetailPage({
   const [submitting, setSubmitting] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  useEffect(() => {
+    setId(new URLSearchParams(window.location.search).get("id") || "");
+  }, []);
+
   const refreshTask = () => {
+    if (!id) return;
     tasksApi.get(id).then(setTask).catch(() => {});
   };
 
@@ -95,6 +96,7 @@ export default function TaskDetailPage({
   };
 
   useEffect(() => {
+    if (!id) return;
     let cancelled = false;
     tasksApi.get(id).then((data) => {
       if (!cancelled) setTask(data);
@@ -166,6 +168,12 @@ export default function TaskDetailPage({
                 </span>
                 <Badge variant="secondary">{task.taskType}</Badge>
                 {task.isRevision && <Badge variant="warning">Revision</Badge>}
+                {formatRepeatInterval(task.repeatIntervalHours) && (
+                  <Badge variant="outline">
+                    &#8635; Repeats {formatRepeatInterval(task.repeatIntervalHours)}
+                    {task.timesCompleted > 0 && ` · done ${task.timesCompleted}x`}
+                  </Badge>
+                )}
               </div>
               <CardTitle className="text-xl">{task.title}</CardTitle>
               {task.subtopic && (

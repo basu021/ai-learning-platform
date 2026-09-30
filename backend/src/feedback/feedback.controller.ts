@@ -15,8 +15,11 @@ export class FeedbackController {
   }
 
   @Get('task/:taskId')
-  findByTask(@Param('taskId') taskId: string) {
-    return this.feedbackService.findByTask(taskId);
+  findByTask(
+    @Param('taskId') taskId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.feedbackService.findByTask(taskId, userId);
   }
 
   @Get('my')

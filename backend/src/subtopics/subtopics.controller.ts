@@ -15,6 +15,7 @@ import {
   UpdateSubtopicDto,
 } from './dto/create-subtopic.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 
 @Controller('api/subtopics')
 @UseGuards(JwtAuthGuard)
@@ -22,27 +23,34 @@ export class SubtopicsController {
   constructor(private subtopicsService: SubtopicsService) {}
 
   @Post()
-  create(@Body() dto: CreateSubtopicDto) {
-    return this.subtopicsService.create(dto);
+  create(@CurrentUser('id') userId: string, @Body() dto: CreateSubtopicDto) {
+    return this.subtopicsService.create(userId, dto);
   }
 
   @Get()
-  findByTopic(@Query('topicId') topicId: string) {
-    return this.subtopicsService.findByTopic(topicId);
+  findByTopic(
+    @CurrentUser('id') userId: string,
+    @Query('topicId') topicId: string,
+  ) {
+    return this.subtopicsService.findByTopic(topicId, userId);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.subtopicsService.findOne(id);
+  findOne(@Param('id') id: string, @CurrentUser('id') userId: string) {
+    return this.subtopicsService.findOne(id, userId);
   }
 
   @Put(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateSubtopicDto) {
-    return this.subtopicsService.update(id, dto);
+  update(
+    @Param('id') id: string,
+    @CurrentUser('id') userId: string,
+    @Body() dto: UpdateSubtopicDto,
+  ) {
+    return this.subtopicsService.update(id, userId, dto);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.subtopicsService.remove(id);
+  remove(@Param('id') id: string, @CurrentUser('id') userId: string) {
+    return this.subtopicsService.remove(id, userId);
   }
 }

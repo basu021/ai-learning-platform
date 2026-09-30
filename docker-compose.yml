@@ -6,7 +6,7 @@ services:
       MYSQL_ROOT_PASSWORD: password
       MYSQL_DATABASE: ai_learning_platform
     ports:
-      - "3306:3306"
+      - "3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
@@ -38,6 +38,7 @@ services:
       DB_PASSWORD: "password"
       DB_NAME: "ai_learning_platform"
       JWT_SECRET: "dev-secret-change-me-in-production"
+      ADMIN_SETUP_KEY: "dev-admin-setup-key-change-me"
       FRONTEND_URL: "http://localhost:3000"
       REDIS_URL: "redis://redis:6379"
       PORT: "3001"
@@ -51,6 +52,8 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: "http://localhost:3001"
     container_name: skillforge-frontend
     ports:
       - "3000:3000"

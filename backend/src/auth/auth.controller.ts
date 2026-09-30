@@ -46,12 +46,13 @@ export class AuthController {
   async googleAuthCallback(@Req() req: Request, @Res() res: Response) {
     const user = req.user as { id: string; email: string };
     const tokens = await this.authService.googleLogin(user);
-    const frontendUrl = this.configService.get<string>(
-      'FRONTEND_URL',
-      'http://localhost:3000',
-    );
+    const frontendUrl = this.configService
+      .get<string>('FRONTEND_URL', 'http://localhost:3000')
+      .split(',')[0]
+      .trim()
+      .replace(/\/$/, '');
     res.redirect(
-      `${frontendUrl}/auth/callback?accessToken=${tokens.accessToken}&refreshToken=${tokens.refreshToken}`,
+      `${frontendUrl}/auth/callback?accessToken=${tokens.accessToken}&refreshToken=${tokens.refreshToken}&userId=${user.id}`,
     );
   }
 

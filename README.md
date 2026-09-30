@@ -35,6 +35,8 @@ A modern, gamified learning and practice management platform for technical skill
 
 ## Quick Start
 
+For a production deployment with a static frontend and a Hostinger NestJS Web App backend, see [HOSTINGER_DEPLOYMENT.md](HOSTINGER_DEPLOYMENT.md).
+
 ### Prerequisites
 - Node.js 22+
 - MySQL 8.0

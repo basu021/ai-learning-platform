@@ -11,10 +11,12 @@ function CallbackHandler() {
   useEffect(() => {
     const accessToken = searchParams.get("accessToken");
     const refreshToken = searchParams.get("refreshToken");
+    const userId = searchParams.get("userId");
 
-    if (accessToken && refreshToken) {
+    if (accessToken && refreshToken && userId) {
       localStorage.setItem("accessToken", accessToken);
       localStorage.setItem("refreshToken", refreshToken);
+      localStorage.setItem("userId", userId);
       router.push("/dashboard");
     } else {
       router.push("/auth/login");

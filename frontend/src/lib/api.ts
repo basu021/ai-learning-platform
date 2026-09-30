@@ -96,6 +96,7 @@ export const authApi = {
       id: string;
       email: string;
       name: string;
+      role: string;
       level: number;
       totalXp: number;
       dailyTaskCount: number;
@@ -166,6 +167,61 @@ export const schedulerApi = {
   generateDaily: () => api("/api/scheduler/generate-daily", { method: "POST" }),
 };
 
+export const configApi = {
+  getAll: () => api<SiteConfigData[]>("/api/admin/config"),
+  getByCategory: (category: string) =>
+    api<SiteConfigData[]>(`/api/admin/config/category/${category}`),
+  upsert: (data: { key: string; value: string; category?: string; label?: string; encrypted?: boolean }) =>
+    api<SiteConfigData>("/api/admin/config", { method: "PUT", body: data }),
+  bulkUpsert: (configs: Array<{ key: string; value: string; category?: string; label?: string; encrypted?: boolean }>) =>
+    api("/api/admin/config/bulk", { method: "PUT", body: { configs } }),
+  delete: (key: string) =>
+    api(`/api/admin/config/${key}`, { method: "DELETE" }),
+  testSmtp: (to: string) =>
+    api<{ success: boolean; messageId?: string }>("/api/admin/config/smtp/test", { method: "POST", body: { to } }),
+  getEmailLogs: (page?: number, limit?: number) =>
+    api<EmailLogsResponse>(`/api/admin/config/email-logs?page=${page || 1}&limit=${limit || 50}`),
+  promoteToAdmin: (setupKey: string) =>
+    api<{ id: string; email: string; name: string; role: string }>("/api/admin/config/promote", { method: "POST", body: { setupKey } }),
+};
+
+export const adminApi = {
+  listUsers: (filters?: { role?: string }) => {
+    const params = new URLSearchParams();
+    if (filters?.role) params.set("role", filters.role);
+    const qs = params.toString();
+    return api<AdminUserData[]>(`/api/admin/users${qs ? `?${qs}` : ""}`);
+  },
+  createUser: (data: { name: string; email: string; password: string; role?: string }) =>
+    api<{ id: string; email: string; name: string; role: string; level: number; totalXp: number; createdAt: string }>(
+      "/api/admin/users",
+      { method: "POST", body: data },
+    ),
+  getUser: (id: string) => api<AdminUserOverview>(`/api/admin/users/${id}`),
+  listTasks: (filters?: { status?: string; userId?: string }) => {
+    const params = new URLSearchParams();
+    if (filters?.status) params.set("status", filters.status);
+    if (filters?.userId) params.set("userId", filters.userId);
+    const qs = params.toString();
+    return api<AdminTaskData[]>(`/api/admin/tasks${qs ? `?${qs}` : ""}`);
+  },
+  listAssignments: () => api<AdminAssignmentGroup[]>("/api/admin/assignments"),
+  assign: (data: AssignContentInput) =>
+    api<AssignContentResult>("/api/admin/assign", { method: "POST", body: data }),
+  updateSubject: (id: string, data: { name?: string; description?: string; icon?: string; color?: string }) =>
+    api(`/api/admin/subjects/${id}`, { method: "PUT", body: data }),
+  deleteSubject: (id: string) => api(`/api/admin/subjects/${id}`, { method: "DELETE" }),
+  updateTopic: (id: string, data: { name?: string; description?: string; icon?: string }) =>
+    api(`/api/admin/topics/${id}`, { method: "PUT", body: data }),
+  deleteTopic: (id: string) => api(`/api/admin/topics/${id}`, { method: "DELETE" }),
+  updateSubtopic: (id: string, data: { name?: string; description?: string; icon?: string }) =>
+    api(`/api/admin/subtopics/${id}`, { method: "PUT", body: data }),
+  deleteSubtopic: (id: string) => api(`/api/admin/subtopics/${id}`, { method: "DELETE" }),
+  updateTask: (id: string, data: { title?: string; description?: string; status?: string; difficulty?: string; taskType?: string; estimatedMins?: number; xpReward?: number; repeatIntervalHours?: number }) =>
+    api(`/api/admin/tasks/${id}`, { method: "PUT", body: data }),
+  deleteTask: (id: string) => api(`/api/admin/tasks/${id}`, { method: "DELETE" }),
+};
+
 // Types
 export interface SubjectWithTopics {
   id: string;
@@ -203,6 +259,8 @@ export interface TaskData {
   hints: string | null;
   commands: string | null;
   tags: string | null;
+  repeatIntervalHours: number | null;
+  timesCompleted: number;
   subtopic?: { name: string; topic?: { name: string; subject?: { name: string; color: string | null } } };
   feedback?: FeedbackData[];
   taskSessions?: SessionData[];
@@ -332,4 +390,170 @@ export interface HeatmapEntry {
   date: string;
   count: number;
   duration: number;
+}
+
+export interface SiteConfigData {
+  id: string;
+  key: string;
+  value: string;
+  encrypted: boolean;
+  category: string;
+  label: string | null;
+}
+
+export interface EmailLogData {
+  id: string;
+  to: string;
+  subject: string;
+  status: string;
+  error: string | null;
+  templateId: string | null;
+  createdAt: string;
+}
+
+export interface EmailLogsResponse {
+  logs: EmailLogData[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface AdminUserData {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  level: number;
+  totalXp: number;
+  difficulty: string;
+  createdAt: string;
+  stats: {
+    subjectsCount: number;
+    totalTasks: number;
+    pendingTasks: number;
+    completedTasks: number;
+  };
+}
+
+export interface AdminTaskInTree {
+  id: string;
+  title: string;
+  description: string;
+  status: string;
+  difficulty: string;
+  taskType: string;
+  estimatedMins: number | null;
+  xpReward: number;
+  assignedBy: string | null;
+  repeatIntervalHours: number | null;
+  timesCompleted: number;
+  createdAt: string;
+}
+
+export interface AdminSubtopicInTree {
+  id: string;
+  name: string;
+  description: string | null;
+  assignedBy: string | null;
+  tasks: AdminTaskInTree[];
+}
+
+export interface AdminTopicInTree {
+  id: string;
+  name: string;
+  description: string | null;
+  assignedBy: string | null;
+  subtopics: AdminSubtopicInTree[];
+}
+
+export interface AdminSubjectInTree {
+  id: string;
+  name: string;
+  description: string | null;
+  icon: string | null;
+  color: string | null;
+  assignedBy: string | null;
+  topics: AdminTopicInTree[];
+}
+
+export interface AdminUserOverview {
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+    level: number;
+    totalXp: number;
+    difficulty: string;
+    dailyTaskCount: number;
+    dailyHours: number;
+    createdAt: string;
+  };
+  subjects: AdminSubjectInTree[];
+}
+
+export interface AdminTaskData {
+  id: string;
+  title: string;
+  description: string;
+  status: string;
+  difficulty: string;
+  taskType: string;
+  estimatedMins: number | null;
+  xpReward: number;
+  assignedBy: string | null;
+  repeatIntervalHours: number | null;
+  timesCompleted: number;
+  createdAt: string;
+  user: { id: string; name: string; email: string };
+  subtopic: { name: string; topic: { name: string; subject: { name: string; color: string | null } } };
+}
+
+export interface AdminAssignmentGroup {
+  assignmentGroupId: string;
+  assignedBy: string | null;
+  subjectName: string;
+  topicName: string | null;
+  subtopicName: string;
+  createdAt: string;
+  targets: Array<{
+    userId: string;
+    userName: string;
+    userEmail: string;
+    total: number;
+    completed: number;
+  }>;
+}
+
+export interface AssignContentInput {
+  userIds: string[];
+  subjectName: string;
+  subjectDescription?: string;
+  subjectIcon?: string;
+  subjectColor?: string;
+  topicName?: string;
+  topicDescription?: string;
+  subtopicName?: string;
+  subtopicDescription?: string;
+  tasks?: Array<{
+    title: string;
+    description: string;
+    difficulty?: string;
+    taskType?: string;
+    estimatedMins?: number;
+    xpReward?: number;
+    repeatIntervalHours?: number;
+  }>;
+}
+
+export interface AssignContentResult {
+  assignmentGroupId: string | null;
+  results: Array<{
+    userId: string;
+    userName: string;
+    subjectId: string;
+    topicId: string | null;
+    subtopicId: string | null;
+    taskIds: string[];
+  }>;
 }

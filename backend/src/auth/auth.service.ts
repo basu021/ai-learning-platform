@@ -6,6 +6,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
+import { MailService } from '../mail/mail.service';
 import { RegisterDto, LoginDto } from './dto';
 
 interface GoogleUserData {
@@ -25,6 +26,7 @@ export class AuthService {
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
+    private mailService: MailService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -47,6 +49,8 @@ export class AuthService {
 
     const tokens = await this.generateTokens(user.id, user.email);
     await this.updateRefreshToken(user.id, tokens.refreshToken);
+
+    void this.mailService.sendWelcomeEmail(user.email, user.name);
 
     return {
       user: { id: user.id, email: user.email, name: user.name },
@@ -142,6 +146,7 @@ export class AuthService {
         email: true,
         name: true,
         avatar: true,
+        role: true,
         level: true,
         totalXp: true,
         dailyTaskCount: true,

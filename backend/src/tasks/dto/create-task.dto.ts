@@ -48,6 +48,10 @@ export class CreateTaskDto {
   @IsOptional()
   @IsString()
   tags?: string;
+
+  @IsOptional()
+  @IsInt()
+  repeatIntervalHours?: number;
 }
 
 export class UpdateTaskStatusDto {

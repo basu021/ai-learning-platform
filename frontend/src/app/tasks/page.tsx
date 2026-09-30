@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { ListTodo, Play, Filter } from "lucide-react";
 import { tasksApi } from "@/lib/api";
 import type { TaskData } from "@/lib/api";
-import { getStatusColor, getDifficultyColor } from "@/lib/utils";
+import { getStatusColor, getDifficultyColor, formatRepeatInterval } from "@/lib/utils";
 import Link from "next/link";
 
 const statusFilters = ["all", "pending", "in_progress", "completed", "skipped"];
@@ -97,9 +97,14 @@ export default function TasksPage() {
                         {task.estimatedMins && <span>{task.estimatedMins}m</span>}
                         <span>{task.xpReward} XP</span>
                         {task.isRevision && <Badge variant="warning" className="text-xs">Revision</Badge>}
+                        {formatRepeatInterval(task.repeatIntervalHours) && (
+                          <Badge variant="outline" className="text-xs">
+                            &#8635; {formatRepeatInterval(task.repeatIntervalHours)}
+                          </Badge>
+                        )}
                       </div>
                     </div>
-                    <Link href={`/tasks/${task.id}`}>
+                    <Link href={`/tasks/view?id=${encodeURIComponent(task.id)}`}>
                       <Button
                         size="sm"
                         variant="ghost"
