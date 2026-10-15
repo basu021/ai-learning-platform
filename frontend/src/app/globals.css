@@ -57,3 +57,85 @@ body {
     linear-gradient(90deg, rgba(99, 102, 241, 0.03) 1px, transparent 1px);
   background-size: 40px 40px;
 }
+
+/* ---------------------------------------------------------------------------
+   Rich content (editor + read-only view)
+--------------------------------------------------------------------------- */
+.rich-content {
+  color: #d1d5db;
+  font-size: 0.925rem;
+  line-height: 1.7;
+  word-wrap: break-word;
+}
+.rich-content > * + * { margin-top: 0.75em; }
+.rich-content h2 { font-size: 1.35rem; font-weight: 700; color: #f3f4f6; margin-top: 1.4em; }
+.rich-content h3 { font-size: 1.12rem; font-weight: 650; color: #f3f4f6; margin-top: 1.2em; }
+.rich-content h4 { font-size: 0.98rem; font-weight: 650; color: #e5e7eb; margin-top: 1em; }
+.rich-content > :first-child { margin-top: 0; }
+.rich-content a { color: #818cf8; text-decoration: underline; text-underline-offset: 2px; }
+.rich-content strong { color: #f3f4f6; }
+.rich-content mark { background: rgba(250, 204, 21, 0.25); color: inherit; border-radius: 2px; padding: 0 2px; }
+.rich-content ul { list-style: disc; padding-left: 1.4em; }
+.rich-content ol { list-style: decimal; padding-left: 1.4em; }
+.rich-content li > p { margin: 0.15em 0; }
+.rich-content ul[data-type="taskList"] { list-style: none; padding-left: 0.2em; }
+.rich-content ul[data-type="taskList"] li { display: flex; gap: 0.5em; align-items: flex-start; }
+.rich-content ul[data-type="taskList"] li > label { margin-top: 0.3em; }
+.rich-content ul[data-type="taskList"] li > div { flex: 1; }
+.rich-content ul[data-type="taskList"] input { accent-color: #6366f1; }
+.rich-content blockquote {
+  border-left: 3px solid #6366f1;
+  background: rgba(99, 102, 241, 0.08);
+  padding: 0.6em 1em;
+  border-radius: 0 6px 6px 0;
+  color: #c7d2fe;
+}
+.rich-content code {
+  background: #1f2937;
+  border: 1px solid #374151;
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+  font-size: 0.85em;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  color: #fda4af;
+}
+.rich-content pre {
+  background: #0b1220;
+  border: 1px solid #1f2937;
+  border-radius: 8px;
+  padding: 0.85em 1em;
+  overflow-x: auto;
+  font-size: 0.83rem;
+  line-height: 1.55;
+}
+.rich-content pre code { background: none; border: 0; padding: 0; color: #e2e8f0; font-size: inherit; }
+/* Commands should scroll, not wrap mid-argument. */
+.rich-content pre, .rich-content pre code { white-space: pre !important; }
+.rich-content hr { border: 0; border-top: 1px solid #374151; margin: 1.5em 0; }
+.rich-content img { max-width: 100%; height: auto; border-radius: 8px; border: 1px solid #1f2937; }
+.rich-content img.ProseMirror-selectednode { outline: 2px solid #6366f1; }
+.rich-content table { width: 100%; border-collapse: collapse; font-size: 0.875rem; display: block; overflow-x: auto; }
+.rich-content th, .rich-content td { border: 1px solid #374151; padding: 0.45em 0.7em; vertical-align: top; min-width: 80px; }
+.rich-content th { background: #1f2937; color: #f3f4f6; font-weight: 600; text-align: left; }
+.rich-content .selectedCell { background: rgba(99, 102, 241, 0.15); }
+.rich-content p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: #6b7280;
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+.prose-editor { min-height: inherit; }
+
+/* highlight.js (GitHub dark-ish) */
+.hljs-comment, .hljs-quote { color: #8b949e; font-style: italic; }
+.hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-type { color: #ff7b72; }
+.hljs-string, .hljs-regexp, .hljs-addition { color: #a5d6ff; }
+.hljs-number, .hljs-symbol, .hljs-bullet { color: #79c0ff; }
+.hljs-title, .hljs-section, .hljs-title.function_ { color: #d2a8ff; }
+.hljs-attr, .hljs-attribute, .hljs-variable, .hljs-template-variable, .hljs-property { color: #79c0ff; }
+.hljs-built_in, .hljs-name, .hljs-tag { color: #7ee787; }
+.hljs-meta { color: #ffa657; }
+.hljs-deletion { color: #ffa198; }
+.hljs-emphasis { font-style: italic; }
+.hljs-strong { font-weight: bold; }

@@ -6,7 +6,7 @@ services:
       MYSQL_ROOT_PASSWORD: password
       MYSQL_DATABASE: ai_learning_platform
     ports:
-      - "3306:3306"
+      - "${MYSQL_HOST_PORT:-3306}:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
@@ -19,7 +19,7 @@ services:
     image: redis:7-alpine
     container_name: skillforge-redis
     ports:
-      - "6379:6379"
+      - "${REDIS_HOST_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
 
@@ -29,7 +29,7 @@ services:
       dockerfile: Dockerfile
     container_name: skillforge-backend
     ports:
-      - "3001:3001"
+      - "${BACKEND_HOST_PORT:-3001}:3001"
     environment:
       DATABASE_URL: "mysql://root:password@mysql:3306/ai_learning_platform"
       DB_HOST: "mysql"
@@ -38,9 +38,17 @@ services:
       DB_PASSWORD: "password"
       DB_NAME: "ai_learning_platform"
       JWT_SECRET: "dev-secret-change-me-in-production"
-      FRONTEND_URL: "http://localhost:3000"
+      FRONTEND_URL: "http://${PUBLIC_HOST:-localhost}:${FRONTEND_HOST_PORT:-3000}"
+      CORS_ORIGINS: "http://localhost:${FRONTEND_HOST_PORT:-3000},http://${PUBLIC_HOST:-localhost}:${FRONTEND_HOST_PORT:-3000}"
       REDIS_URL: "redis://redis:6379"
       PORT: "3001"
+      UPLOAD_DIR: "/app/uploads"
+      APP_TIMEZONE: "${APP_TIMEZONE:-Asia/Kolkata}"
+      ADMIN_EMAIL: "${ADMIN_EMAIL:-}"
+      ADMIN_PASSWORD: "${ADMIN_PASSWORD:-}"
+      ADMIN_USERNAME: "${ADMIN_USERNAME:-admin}"
+    volumes:
+      - uploads_data:/app/uploads
     depends_on:
       mysql:
         condition: service_healthy
@@ -51,14 +59,18 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: "http://${PUBLIC_HOST:-localhost}:${BACKEND_HOST_PORT:-3001}"
+        API_INTERNAL_URL: "http://backend:3001"
     container_name: skillforge-frontend
     ports:
-      - "3000:3000"
+      - "${FRONTEND_HOST_PORT:-3000}:3000"
     environment:
-      NEXT_PUBLIC_API_URL: "http://localhost:3001"
+      NEXT_PUBLIC_API_URL: "http://${PUBLIC_HOST:-localhost}:${BACKEND_HOST_PORT:-3001}"
     depends_on:
       - backend
 
 volumes:
   mysql_data:
   redis_data:
+  uploads_data:

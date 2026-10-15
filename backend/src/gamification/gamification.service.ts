@@ -50,7 +50,7 @@ export class GamificationService {
     today.setHours(0, 0, 0, 0);
 
     let streak = await this.prisma.streak.findFirst({
-      where: { userId, type: 'daily', subjectName: null },
+      where: { userId, type: 'daily' },
     });
 
     if (!streak) {
@@ -105,7 +105,7 @@ export class GamificationService {
     });
 
     const streak = await this.prisma.streak.findFirst({
-      where: { userId, type: 'daily', subjectName: null },
+      where: { userId, type: 'daily' },
     });
 
     const achievements = await this.prisma.userAchievement.findMany({
@@ -119,11 +119,29 @@ export class GamificationService {
       take: 30,
     });
 
-    const progressBySubtopic = await this.prisma.learningProgress.findMany({
+    const progress = await this.prisma.learningProgress.findMany({
       where: { userId },
-      include: {
-        subtopic: { include: { topic: { include: { subject: true } } } },
-      },
+      orderBy: { lastPracticedAt: 'desc' },
+      take: 50,
+    });
+    const [subjects, nodes] = await Promise.all([
+      this.prisma.subject.findMany({
+        where: { id: { in: progress.map((p) => p.subjectId) } },
+        select: { id: true, title: true },
+      }),
+      this.prisma.contentNode.findMany({
+        where: { id: { in: progress.map((p) => p.scopeKey) } },
+        select: { id: true, title: true, type: true },
+      }),
+    ]);
+    const progressByScope = progress.map((p) => {
+      const node = nodes.find((n) => n.id === p.scopeKey);
+      return {
+        ...p,
+        subjectTitle: subjects.find((s) => s.id === p.subjectId)?.title ?? '',
+        scopeTitle: node?.title ?? null,
+        scopeType: node?.type ?? 'SUBJECT',
+      };
     });
 
     const nextLevelXp = this.getNextLevelXp(user?.level || 1);
@@ -139,7 +157,7 @@ export class GamificationService {
         unlockedAt: a.unlockedAt,
       })),
       xpHistory,
-      progressBySubtopic,
+      progressByScope,
     };
   }
 

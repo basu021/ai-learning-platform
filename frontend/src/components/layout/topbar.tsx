@@ -1,83 +1,130 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import {
-  Bell,
-  Flame,
-  LogOut,
-  Star,
-} from "lucide-react";
-import { authApi } from "@/lib/api";
-import { getXpForLevel } from "@/lib/utils";
+import { Bell, LogOut, Star, ShieldCheck } from "lucide-react";
+import { notificationsApi, type NotificationItem } from "@/lib/api";
+import { useSession } from "@/lib/auth";
+import { cn, timeAgo } from "@/lib/utils";
 
-interface UserProfile {
-  name: string;
-  level: number;
-  totalXp: number;
+function Notifications() {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [data, setData] = useState<{ items: NotificationItem[]; unread: number }>({ items: [], unread: 0 });
+  const ref = useRef<HTMLDivElement>(null);
+
+  const load = useCallback(() => {
+    notificationsApi.list().then(setData).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    load();
+    const t = setInterval(load, 60_000);
+    return () => clearInterval(t);
+  }, [load]);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [open]);
+
+  const openItem = async (n: NotificationItem) => {
+    if (!n.read) await notificationsApi.read(n.id).catch(() => {});
+    setOpen(false);
+    load();
+    if (n.link) router.push(n.link);
+  };
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => {
+          setOpen(!open);
+          if (!open) load();
+        }}
+        className="relative rounded-lg p-2 text-gray-400 hover:bg-gray-800 hover:text-gray-200"
+        aria-label="Notifications"
+      >
+        <Bell className="h-4 w-4" />
+        {data.unread > 0 && (
+          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold text-white">
+            {data.unread > 9 ? "9+" : data.unread}
+          </span>
+        )}
+      </button>
+      {open && (
+        <div className="absolute right-0 top-11 z-50 w-96 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-gray-800 bg-gray-900 shadow-2xl">
+          <div className="flex items-center justify-between border-b border-gray-800 px-4 py-2.5">
+            <span className="text-sm font-semibold">Notifications</span>
+            {data.unread > 0 && (
+              <button
+                className="text-xs text-indigo-400 hover:underline"
+                onClick={() => notificationsApi.readAll().then(load)}
+              >
+                Mark all read
+              </button>
+            )}
+          </div>
+          <div className="max-h-96 overflow-y-auto">
+            {data.items.length === 0 ? (
+              <p className="px-4 py-8 text-center text-sm text-gray-500">You&apos;re all caught up</p>
+            ) : (
+              data.items.map((n) => (
+                <button
+                  key={n.id}
+                  onClick={() => openItem(n)}
+                  className={cn(
+                    "block w-full border-b border-gray-800/60 px-4 py-3 text-left hover:bg-gray-800/50",
+                    !n.read && "bg-indigo-500/5",
+                  )}
+                >
+                  <div className="flex items-center gap-2">
+                    {!n.read && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-indigo-400" />}
+                    <span className="text-sm font-medium text-gray-200">{n.title}</span>
+                    <span className="ml-auto shrink-0 text-[11px] text-gray-500">{timeAgo(n.createdAt)}</span>
+                  </div>
+                  <p className="mt-0.5 text-xs text-gray-400">{n.message}</p>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function Topbar() {
-  const router = useRouter();
-  const [user, setUser] = useState<UserProfile | null>(null);
-
-  useEffect(() => {
-    authApi.profile().then((data) => {
-      setUser({ name: data.name, level: data.level, totalXp: data.totalXp });
-    }).catch(() => {});
-  }, []);
-
-  const handleLogout = () => {
-    authApi.logout().catch(() => {});
-    localStorage.removeItem("accessToken");
-    localStorage.removeItem("refreshToken");
-    localStorage.removeItem("userId");
-    router.push("/auth/login");
-  };
-
-  const nextLevelXp = user ? getXpForLevel(user.level) : 100;
-  const xpProgress = user ? Math.min((user.totalXp / nextLevelXp) * 100, 100) : 0;
-
+  const { me, isAdmin, logout } = useSession();
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-gray-800 bg-gray-950/80 backdrop-blur-xl px-6">
-      <div className="flex items-center gap-4">
-        <h2 className="text-sm font-medium text-gray-400">
-          Welcome back,{" "}
-          <span className="text-gray-100">{user?.name || "Engineer"}</span>
-        </h2>
+    <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-4 border-b border-gray-800 bg-gray-950/80 px-4 backdrop-blur-xl md:px-6">
+      <div className="min-w-0 truncate text-sm text-gray-400">
+        Signed in as <span className="text-gray-100">{me?.name}</span>{" "}
+        <span className="text-gray-500">@{me?.username}</span>
       </div>
-
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2 rounded-lg bg-gray-800/50 px-3 py-1.5 border border-gray-700/50">
-          <Flame className="h-4 w-4 text-orange-400" />
-          <span className="text-xs font-medium text-gray-300">0 day streak</span>
-        </div>
-
-        <div className="flex items-center gap-2 rounded-lg bg-gray-800/50 px-3 py-1.5 border border-gray-700/50">
-          <Star className="h-4 w-4 text-yellow-400" />
-          <span className="text-xs font-medium text-gray-300">
-            {user?.totalXp || 0} XP
-          </span>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Badge variant="outline" className="bg-indigo-500/10 border-indigo-500/30">
-            Lvl {user?.level || 1}
+      <div className="flex items-center gap-2">
+        {isAdmin && (
+          <Badge variant="default" className="hidden gap-1 sm:inline-flex">
+            <ShieldCheck className="h-3 w-3" /> Admin
           </Badge>
-          <Progress value={xpProgress} className="w-20 h-1.5" indicatorClassName="bg-gradient-to-r from-indigo-500 to-purple-500" />
-        </div>
-
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="h-4 w-4 text-gray-400" />
-          <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-red-500" />
-        </Button>
-
-        <Button variant="ghost" size="icon" onClick={handleLogout}>
-          <LogOut className="h-4 w-4 text-gray-400" />
-        </Button>
+        )}
+        <Link
+          href="/dashboard"
+          className="hidden items-center gap-1.5 rounded-lg border border-gray-700/50 bg-gray-800/50 px-2.5 py-1 text-xs text-gray-300 sm:flex"
+        >
+          <Star className="h-3.5 w-3.5 text-yellow-400" />
+          {me?.totalXp ?? 0} XP · Lvl {me?.level ?? 1}
+        </Link>
+        <Notifications />
+        <button onClick={logout} className="rounded-lg p-2 text-gray-400 hover:bg-gray-800 hover:text-gray-200" aria-label="Sign out">
+          <LogOut className="h-4 w-4" />
+        </button>
       </div>
     </header>
   );

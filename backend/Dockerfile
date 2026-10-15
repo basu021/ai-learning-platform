@@ -13,5 +13,7 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
+RUN mkdir -p /app/uploads
 EXPOSE 3001
-CMD ["node", "dist/src/main.js"]
+# Apply pending migrations, then start the API.
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/src/main.js"]

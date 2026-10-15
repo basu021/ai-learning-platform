@@ -6,215 +6,374 @@ datasource db {
   provider = "mysql"
 }
 
-model User {
-  id            String   @id @default(uuid())
-  email         String   @unique
-  passwordHash  String?  @map("password_hash")
-  name          String
-  avatar        String?
-  provider      String   @default("local") // local, google
-  providerId    String?  @map("provider_id")
-  emailVerified Boolean  @default(false) @map("email_verified")
-  refreshToken  String?  @db.Text @map("refresh_token")
-  level         Int      @default(1)
-  totalXp       Int      @default(0) @map("total_xp")
-  dailyTaskCount Int     @default(5) @map("daily_task_count")
-  dailyHours    Float    @default(2.0) @map("daily_hours")
-  difficulty    String   @default("beginner") // beginner, intermediate, advanced, expert
-  revisionFreq  Int      @default(3) @map("revision_freq")
-  repInterval   Int      @default(7) @map("rep_interval")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
-  deletedAt     DateTime? @map("deleted_at")
+enum Role {
+  ADMIN
+  USER
+}
 
-  subjects         Subject[]
-  tasks            Task[]
+// PUBLIC  - in the catalog, anyone logged in can open it (admin only)
+// LISTED  - in the catalog with a marketing preview; full access on request (admin only)
+// PRIVATE - only the owner, members and admins
+enum Visibility {
+  PUBLIC
+  LISTED
+  PRIVATE
+}
+
+enum PublishStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum NodeType {
+  CHAPTER
+  TOPIC
+  SUBTOPIC
+}
+
+enum MemberRole {
+  VIEWER
+  EDITOR
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ChangeAction {
+  CREATE
+  UPDATE
+  DELETE
+}
+
+enum Frequency {
+  ONCE
+  DAILY
+  WEEKLY
+  MONTHLY
+  CUSTOM
+}
+
+enum OccurrenceStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  SKIPPED
+}
+
+model User {
+  id             String    @id @default(uuid())
+  email          String    @unique
+  username       String    @unique
+  passwordHash   String?   @map("password_hash")
+  name           String
+  avatar         String?
+  role           Role      @default(USER)
+  provider       String    @default("local") // local, google
+  providerId     String?   @map("provider_id")
+  emailVerified  Boolean   @default(false) @map("email_verified")
+  refreshToken   String?   @db.Text @map("refresh_token")
+  level          Int       @default(1)
+  totalXp        Int       @default(0) @map("total_xp")
+  dailyTaskCount Int       @default(5) @map("daily_task_count")
+  dailyHours     Float     @default(2.0) @map("daily_hours")
+  difficulty     String    @default("beginner") // beginner, intermediate, advanced, expert
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  ownedSubjects    Subject[]          @relation("SubjectOwner")
+  memberships      SubjectMember[]    @relation("MemberUser")
+  grantedMembers   SubjectMember[]    @relation("MemberGrantedBy")
+  accessRequests   AccessRequest[]    @relation("RequestUser")
+  decidedRequests  AccessRequest[]    @relation("RequestDecider")
+  changeRequests   ChangeRequest[]    @relation("ChangeAuthor")
+  reviewedChanges  ChangeRequest[]    @relation("ChangeReviewer")
+  revisions        ContentRevision[]
+  attachments      Attachment[]
+  createdTasks     Task[]             @relation("TaskCreator")
+  assignedTasks    Task[]             @relation("TaskAssignee")
+  occurrences      TaskOccurrence[]
   taskSessions     TaskSession[]
   feedback         Feedback[]
-  dailyTaskQueues  DailyTaskQueue[]
   streaks          Streak[]
   achievements     UserAchievement[]
   xpHistory        XpHistory[]
-  revisionHistory  RevisionHistory[]
   learningProgress LearningProgress[]
   notifications    Notification[]
 
   @@map("users")
 }
 
+model Category {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  description String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  subjects    Subject[]
+
+  @@map("categories")
+}
+
 model Subject {
-  id          String   @id @default(uuid())
-  userId      String   @map("user_id")
-  name        String
-  description String?  @db.Text
-  icon        String?
-  color       String?  @default("#6366f1")
-  order       Int      @default(0)
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-  deletedAt   DateTime? @map("deleted_at")
+  id          String        @id @default(uuid())
+  ownerId     String        @map("owner_id")
+  title       String
+  summary     String?       @db.VarChar(1000)
+  content     String?       @db.LongText
+  visibility  Visibility    @default(PRIVATE)
+  status      PublishStatus @default(DRAFT)
+  categoryId  String?       @map("category_id")
+  tags        String?       @db.VarChar(500) // comma separated
+  color       String?       @default("#6366f1")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+  deletedAt   DateTime?     @map("deleted_at")
 
-  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  topics Topic[]
+  owner          User              @relation("SubjectOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  category       Category?         @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  nodes          ContentNode[]
+  members        SubjectMember[]
+  accessRequests AccessRequest[]
+  changeRequests ChangeRequest[]
+  revisions      ContentRevision[]
+  attachments    Attachment[]
+  tasks          Task[]
 
-  @@index([userId])
+  @@index([ownerId])
+  @@index([visibility, status])
   @@map("subjects")
 }
 
-model Topic {
-  id          String   @id @default(uuid())
-  subjectId   String   @map("subject_id")
-  name        String
-  description String?  @db.Text
-  icon        String?
-  order       Int      @default(0)
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-  deletedAt   DateTime? @map("deleted_at")
+// Chapter -> Topic -> Subtopic, all under one Subject.
+model ContentNode {
+  id        String    @id @default(uuid())
+  subjectId String    @map("subject_id")
+  parentId  String?   @map("parent_id")
+  type      NodeType
+  title     String
+  summary   String?   @db.VarChar(1000)
+  content   String?   @db.LongText
+  order     Int       @default(0)
+  isPreview Boolean   @default(false) @map("is_preview") // visible to everyone on LISTED subjects
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
 
-  subject   Subject    @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  subtopics Subtopic[]
+  subject     Subject           @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  parent      ContentNode?      @relation("NodeTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children    ContentNode[]     @relation("NodeTree")
+  revisions   ContentRevision[]
+  changes     ChangeRequest[]
+  attachments Attachment[]
+  tasks       Task[]
 
-  @@index([subjectId])
-  @@map("topics")
+  @@index([subjectId, parentId])
+  @@map("content_nodes")
 }
 
-model Subtopic {
-  id          String   @id @default(uuid())
-  topicId     String   @map("topic_id")
-  name        String
-  description String?  @db.Text
-  icon        String?
-  order       Int      @default(0)
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-  deletedAt   DateTime? @map("deleted_at")
+model SubjectMember {
+  id          String     @id @default(uuid())
+  subjectId   String     @map("subject_id")
+  userId      String     @map("user_id")
+  role        MemberRole @default(VIEWER)
+  grantedById String?    @map("granted_by_id")
+  createdAt   DateTime   @default(now()) @map("created_at")
 
-  topic            Topic             @relation(fields: [topicId], references: [id], onDelete: Cascade)
-  tasks            Task[]
-  learningProgress LearningProgress[]
+  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  user      User    @relation("MemberUser", fields: [userId], references: [id], onDelete: Cascade)
+  grantedBy User?   @relation("MemberGrantedBy", fields: [grantedById], references: [id], onDelete: SetNull)
 
-  @@index([topicId])
-  @@map("subtopics")
+  @@unique([subjectId, userId])
+  @@index([userId])
+  @@map("subject_members")
 }
 
+model AccessRequest {
+  id          String        @id @default(uuid())
+  subjectId   String        @map("subject_id")
+  userId      String        @map("user_id")
+  message     String?       @db.VarChar(1000)
+  status      RequestStatus @default(PENDING)
+  decidedById String?       @map("decided_by_id")
+  decidedAt   DateTime?     @map("decided_at")
+  createdAt   DateTime      @default(now()) @map("created_at")
+
+  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  user      User    @relation("RequestUser", fields: [userId], references: [id], onDelete: Cascade)
+  decidedBy User?   @relation("RequestDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+
+  @@index([subjectId, status])
+  @@index([userId])
+  @@map("access_requests")
+}
+
+// An edit by a non-owner editor, waiting for the owner's approval.
+// nodeId null + action UPDATE = subject-level edit; action CREATE uses payload.parentId/type.
+model ChangeRequest {
+  id           String        @id @default(uuid())
+  subjectId    String        @map("subject_id")
+  nodeId       String?       @map("node_id")
+  action       ChangeAction
+  payload      Json
+  changeNote   String?       @db.VarChar(500) @map("change_note")
+  authorId     String        @map("author_id")
+  status       RequestStatus @default(PENDING)
+  reviewedById String?       @map("reviewed_by_id")
+  reviewNote   String?       @db.VarChar(500) @map("review_note")
+  reviewedAt   DateTime?     @map("reviewed_at")
+  createdAt    DateTime      @default(now()) @map("created_at")
+
+  subject    Subject      @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  node       ContentNode? @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  author     User         @relation("ChangeAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  reviewedBy User?        @relation("ChangeReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([subjectId, status])
+  @@map("change_requests")
+}
+
+// Snapshot of the state *before* a change was applied. Only the latest 3 per entity are kept.
+model ContentRevision {
+  id          String       @id @default(uuid())
+  subjectId   String       @map("subject_id")
+  nodeId      String?      @map("node_id")
+  action      ChangeAction
+  snapshot    Json
+  changeNote  String?      @db.VarChar(500) @map("change_note")
+  changedById String       @map("changed_by_id")
+  createdAt   DateTime     @default(now()) @map("created_at")
+
+  subject   Subject      @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  node      ContentNode? @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  changedBy User         @relation(fields: [changedById], references: [id], onDelete: Cascade)
+
+  @@index([subjectId, nodeId, createdAt])
+  @@map("content_revisions")
+}
+
+model Attachment {
+  id           String   @id @default(uuid())
+  subjectId    String   @map("subject_id")
+  nodeId       String?  @map("node_id")
+  filename     String
+  contentType  String?  @map("content_type")
+  sizeBytes    Int      @map("size_bytes")
+  storagePath  String   @map("storage_path")
+  checksum     String   @db.Char(64)
+  inline       Boolean  @default(false) // embedded in editor content (images)
+  uploadedById String   @map("uploaded_by_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  subject    Subject      @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  node       ContentNode? @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  uploadedBy User         @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
+
+  @@index([subjectId, nodeId])
+  @@map("attachments")
+}
+
+// A practice task scoped to a subject or any node beneath it, with its recurrence rule.
 model Task {
-  id            String   @id @default(uuid())
-  subtopicId    String   @map("subtopic_id")
-  userId        String   @map("user_id")
+  id            String    @id @default(uuid())
+  subjectId     String    @map("subject_id")
+  nodeId        String?   @map("node_id")
+  createdById   String    @map("created_by_id")
+  assigneeId    String    @map("assignee_id")
   title         String
-  description   String   @db.Text
-  difficulty    String   @default("beginner") // beginner, intermediate, advanced, expert
-  taskType      String   @default("practice") @map("task_type") // practice, troubleshooting, scenario, revision
-  status        String   @default("pending") // pending, started, in_progress, completed, skipped, revision_required
-  priority      Int      @default(0)
-  estimatedMins Int?     @map("estimated_mins")
-  xpReward      Int      @default(10) @map("xp_reward")
-  isRevision    Boolean  @default(false) @map("is_revision")
-  aiGenerated   Boolean  @default(true) @map("ai_generated")
-  aiModel       String?  @map("ai_model")
-  aiPrompt      String?  @db.Text @map("ai_prompt")
-  hints         String?  @db.Text // JSON array of hints
-  commands      String?  @db.Text // JSON array of relevant commands
-  tags          String?  @db.Text // JSON array of tags
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  instructions  String?   @db.LongText
+  difficulty    String    @default("beginner") // beginner, intermediate, advanced, expert
+  estimatedMins Int?      @map("estimated_mins")
+  xpReward      Int       @default(10) @map("xp_reward")
+  frequency     Frequency @default(ONCE)
+  weekdays      String?   // WEEKLY: comma separated 0-6 (Sun-Sat)
+  monthDay      Int?      @map("month_day") // MONTHLY: 1-31, clamped to month end
+  intervalDays  Int?      @map("interval_days") // CUSTOM: every N days
+  startDate     DateTime  @db.Date @map("start_date")
+  endDate       DateTime? @db.Date @map("end_date")
+  generatedThru DateTime? @db.Date @map("generated_thru")
+  active        Boolean   @default(true)
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
   deletedAt     DateTime? @map("deleted_at")
 
-  subtopic       Subtopic        @relation(fields: [subtopicId], references: [id], onDelete: Cascade)
-  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  taskSessions   TaskSession[]
-  feedback       Feedback[]
-  dailyTaskQueue DailyTaskQueue[]
-  aiGenerations  AiGeneration[]
-  revisionHistory RevisionHistory[]
+  subject     Subject          @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  node        ContentNode?     @relation(fields: [nodeId], references: [id], onDelete: SetNull)
+  createdBy   User             @relation("TaskCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  assignee    User             @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: Cascade)
+  occurrences TaskOccurrence[]
 
-  @@index([subtopicId])
-  @@index([userId])
-  @@index([status])
+  @@index([assigneeId, active])
+  @@index([subjectId])
   @@map("tasks")
 }
 
+model TaskOccurrence {
+  id          String           @id @default(uuid())
+  taskId      String           @map("task_id")
+  userId      String           @map("user_id")
+  dueDate     DateTime         @db.Date @map("due_date")
+  status      OccurrenceStatus @default(PENDING)
+  completedAt DateTime?        @map("completed_at")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  task         Task          @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskSessions TaskSession[]
+  feedback     Feedback[]
+
+  @@unique([taskId, dueDate])
+  @@index([userId, dueDate])
+  @@map("task_occurrences")
+}
+
 model TaskSession {
-  id          String    @id @default(uuid())
-  taskId      String    @map("task_id")
-  userId      String    @map("user_id")
-  startedAt   DateTime  @default(now()) @map("started_at")
-  finishedAt  DateTime? @map("finished_at")
-  duration    Int?      // seconds
-  status      String    @default("active") // active, paused, completed, abandoned
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+  id           String    @id @default(uuid())
+  occurrenceId String    @map("occurrence_id")
+  userId       String    @map("user_id")
+  startedAt    DateTime  @default(now()) @map("started_at")
+  finishedAt   DateTime? @map("finished_at")
+  duration     Int? // seconds
+  status       String    @default("active") // active, completed, abandoned
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
 
-  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  occurrence TaskOccurrence @relation(fields: [occurrenceId], references: [id], onDelete: Cascade)
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([taskId])
+  @@index([occurrenceId])
   @@index([userId])
   @@map("task_sessions")
 }
 
 model Feedback {
-  id              String   @id @default(uuid())
-  taskId          String   @map("task_id")
-  userId          String   @map("user_id")
-  whatWasDone     String?  @db.Text @map("what_was_done")
-  problemsFaced   String?  @db.Text @map("problems_faced")
-  commandsUsed    String?  @db.Text @map("commands_used")
-  confidenceLevel Int      @default(3) @map("confidence_level") // 1-5
-  needsImprovement String? @db.Text @map("needs_improvement")
-  notesForTomorrow String? @db.Text @map("notes_for_tomorrow")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  id               String   @id @default(uuid())
+  occurrenceId     String   @map("occurrence_id")
+  userId           String   @map("user_id")
+  whatWasDone      String?  @db.Text @map("what_was_done")
+  problemsFaced    String?  @db.Text @map("problems_faced")
+  commandsUsed     String?  @db.Text @map("commands_used")
+  confidenceLevel  Int      @default(3) @map("confidence_level") // 1-5
+  needsImprovement String?  @db.Text @map("needs_improvement")
+  notesForTomorrow String?  @db.Text @map("notes_for_tomorrow")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
 
-  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  occurrence TaskOccurrence @relation(fields: [occurrenceId], references: [id], onDelete: Cascade)
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([taskId])
+  @@index([occurrenceId])
   @@index([userId])
   @@map("feedback")
-}
-
-model AiGeneration {
-  id           String   @id @default(uuid())
-  taskId       String?  @map("task_id")
-  provider     String   // openai, gemini, claude, ollama
-  model        String
-  prompt       String   @db.Text
-  response     String   @db.LongText
-  tokensUsed   Int?     @map("tokens_used")
-  latencyMs    Int?     @map("latency_ms")
-  createdAt    DateTime @default(now()) @map("created_at")
-
-  task Task? @relation(fields: [taskId], references: [id], onDelete: SetNull)
-
-  @@index([taskId])
-  @@map("ai_generations")
-}
-
-model DailyTaskQueue {
-  id          String   @id @default(uuid())
-  userId      String   @map("user_id")
-  taskId      String   @map("task_id")
-  scheduledAt DateTime @map("scheduled_at")
-  position    Int      @default(0)
-  completed   Boolean  @default(false)
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
-
-  @@index([userId, scheduledAt])
-  @@index([taskId])
-  @@map("daily_task_queue")
 }
 
 model Streak {
   id           String   @id @default(uuid())
   userId       String   @map("user_id")
-  type         String   @default("daily") // daily, subject
-  subjectName  String?  @map("subject_name")
+  type         String   @default("daily")
   currentCount Int      @default(0) @map("current_count")
   longestCount Int      @default(0) @map("longest_count")
   lastActiveAt DateTime @default(now()) @map("last_active_at")
@@ -223,8 +382,7 @@ model Streak {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, type, subjectName])
-  @@index([userId])
+  @@unique([userId, type])
   @@map("streaks")
 }
 
@@ -233,7 +391,7 @@ model Achievement {
   name        String   @unique
   description String   @db.Text
   icon        String?
-  category    String   // streak, mastery, completion, special
+  category    String // streak, mastery, completion, special
   xpReward    Int      @default(0) @map("xp_reward")
   condition   String   @db.Text // JSON condition definition
   createdAt   DateTime @default(now()) @map("created_at")
@@ -261,7 +419,7 @@ model XpHistory {
   id        String   @id @default(uuid())
   userId    String   @map("user_id")
   amount    Int
-  source    String   // task_completion, achievement, streak_bonus, daily_quest
+  source    String // task_completion, achievement, streak_bonus
   sourceId  String?  @map("source_id")
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -272,43 +430,24 @@ model XpHistory {
   @@map("xp_history")
 }
 
-model RevisionHistory {
-  id             String   @id @default(uuid())
-  userId         String   @map("user_id")
-  taskId         String   @map("task_id")
-  revisionNumber Int      @map("revision_number")
-  scheduledFor   DateTime @map("scheduled_for")
-  completedAt    DateTime? @map("completed_at")
-  quality        Int?     // 1-5 rating of how well they did
-  createdAt      DateTime @default(now()) @map("created_at")
+// Progress per practised scope; scopeKey is the nodeId, or the subjectId for subject-level tasks.
+model LearningProgress {
+  id              String    @id @default(uuid())
+  userId          String    @map("user_id")
+  subjectId       String    @map("subject_id")
+  scopeKey        String    @map("scope_key")
+  mastery         Float     @default(0) // 0-100
+  tasksCompleted  Int       @default(0) @map("tasks_completed")
+  avgConfidence   Float     @default(0) @map("avg_confidence")
+  avgTimeSpent    Float     @default(0) @map("avg_time_spent")
+  lastPracticedAt DateTime? @map("last_practiced_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
-  @@index([userId, scheduledFor])
-  @@index([taskId])
-  @@map("revision_history")
-}
-
-model LearningProgress {
-  id            String   @id @default(uuid())
-  userId        String   @map("user_id")
-  subtopicId    String   @map("subtopic_id")
-  mastery       Float    @default(0) // 0-100
-  tasksCompleted Int     @default(0) @map("tasks_completed")
-  tasksFailed   Int      @default(0) @map("tasks_failed")
-  avgConfidence Float    @default(0) @map("avg_confidence")
-  avgTimeSpent  Float    @default(0) @map("avg_time_spent")
-  weakAreas     String?  @db.Text @map("weak_areas") // JSON array
-  lastPracticedAt DateTime? @map("last_practiced_at")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
-
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  subtopic Subtopic @relation(fields: [subtopicId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, subtopicId])
-  @@index([userId])
+  @@unique([userId, scopeKey])
+  @@index([userId, subjectId])
   @@map("learning_progress")
 }
 
@@ -317,7 +456,8 @@ model Notification {
   userId    String   @map("user_id")
   title     String
   message   String   @db.Text
-  type      String   // achievement, streak, reminder, system
+  type      String // share, assign, access_request, change_request, review, achievement, system
+  link      String?
   read      Boolean  @default(false)
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

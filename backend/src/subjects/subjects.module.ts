@@ -1,10 +1,16 @@
 import { Module } from '@nestjs/common';
+import { AccessService } from './access.service';
+import { ContentService } from './content.service';
 import { SubjectsService } from './subjects.service';
-import { SubjectsController } from './subjects.controller';
+import {
+  CategoriesController,
+  ReviewsController,
+  SubjectsController,
+} from './subjects.controller';
 
 @Module({
-  providers: [SubjectsService],
-  controllers: [SubjectsController],
-  exports: [SubjectsService],
+  providers: [AccessService, ContentService, SubjectsService],
+  controllers: [SubjectsController, ReviewsController, CategoriesController],
+  exports: [AccessService, ContentService],
 })
 export class SubjectsModule {}

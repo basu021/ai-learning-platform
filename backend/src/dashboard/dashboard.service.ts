@@ -1,174 +1,134 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { TasksService } from '../tasks/tasks.service';
 
 @Injectable()
 export class DashboardService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private tasks: TasksService,
+  ) {}
 
   async getDashboard(userId: string) {
-    const [
-      todaysTasks,
-      subjectProgress,
-      weakAreas,
-      recentActivity,
-      upcomingRevisions,
-      streak,
-      user,
-      notifications,
-    ] = await Promise.all([
-      this.getTodaysTasks(userId),
-      this.getSubjectProgress(userId),
-      this.getWeakAreas(userId),
-      this.getRecentActivity(userId),
-      this.getUpcomingRevisions(userId),
-      this.getStreak(userId),
-      this.prisma.user.findUnique({
-        where: { id: userId },
-        select: {
-          totalXp: true,
-          level: true,
-          name: true,
-          dailyTaskCount: true,
-        },
-      }),
-      this.prisma.notification.findMany({
-        where: { userId, read: false },
-        orderBy: { createdAt: 'desc' },
-        take: 10,
-      }),
-    ]);
+    const [agenda, user, streak, subjectProgress, recentActivity, weakAreas] =
+      await Promise.all([
+        this.tasks.agenda(userId),
+        this.prisma.user.findUnique({
+          where: { id: userId },
+          select: { totalXp: true, level: true, name: true, role: true },
+        }),
+        this.prisma.streak.findFirst({ where: { userId, type: 'daily' } }),
+        this.getSubjectProgress(userId),
+        this.getRecentActivity(userId),
+        this.getWeakAreas(userId),
+      ]);
 
-    const totalTasks = todaysTasks.length;
-    const completedTasks = todaysTasks.filter((t) => t.completed).length;
-
+    const done = agenda.todayItems.filter(
+      (o) => o.status === 'COMPLETED',
+    ).length;
     return {
       user,
-      todaysTasks,
-      todayProgress: { total: totalTasks, completed: completedTasks },
-      subjectProgress,
-      weakAreas,
-      recentActivity,
-      upcomingRevisions,
       streak,
-      notifications,
+      agenda,
+      todayProgress: { total: agenda.todayItems.length, completed: done },
+      subjectProgress,
+      recentActivity,
+      weakAreas,
     };
   }
 
-  private async getTodaysTasks(userId: string) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-
-    return this.prisma.dailyTaskQueue.findMany({
-      where: { userId, scheduledAt: { gte: today, lt: tomorrow } },
-      include: {
-        task: {
-          include: {
-            subtopic: { include: { topic: { include: { subject: true } } } },
-            taskSessions: {
-              where: { status: 'active' },
-              take: 1,
-            },
-          },
-        },
-      },
-      orderBy: { position: 'asc' },
-    });
-  }
-
+  /** Completion rate of due practice per subject. */
   private async getSubjectProgress(userId: string) {
-    const subjects = await this.prisma.subject.findMany({
-      where: { userId, deletedAt: null },
-      include: {
-        topics: {
-          where: { deletedAt: null },
-          include: {
-            subtopics: {
-              where: { deletedAt: null },
-              include: {
-                learningProgress: { where: { userId } },
-                _count: { select: { tasks: true } },
-              },
-            },
-          },
-        },
+    const groups = await this.prisma.taskOccurrence.groupBy({
+      by: ['taskId', 'status'],
+      where: { userId },
+      _count: { _all: true },
+    });
+    if (!groups.length) return [];
+    const tasks = await this.prisma.task.findMany({
+      where: { id: { in: [...new Set(groups.map((g) => g.taskId))] } },
+      select: {
+        id: true,
+        subject: { select: { id: true, title: true, color: true } },
       },
     });
-
-    return subjects.map((subject) => {
-      let totalMastery = 0;
-      let subtopicCount = 0;
-      let totalTasks = 0;
-      let completedTasks = 0;
-
-      subject.topics.forEach((topic) => {
-        topic.subtopics.forEach((subtopic) => {
-          subtopicCount++;
-          totalTasks += subtopic._count.tasks;
-          if (subtopic.learningProgress.length > 0) {
-            const progress = subtopic.learningProgress[0];
-            totalMastery += progress.mastery;
-            completedTasks += progress.tasksCompleted;
-          }
-        });
-      });
-
-      return {
-        id: subject.id,
-        name: subject.name,
-        color: subject.color,
-        icon: subject.icon,
-        mastery: subtopicCount > 0 ? totalMastery / subtopicCount : 0,
-        totalTasks,
-        completedTasks,
-        topicCount: subject.topics.length,
-        subtopicCount,
+    const bySubject = new Map<
+      string,
+      {
+        id: string;
+        title: string;
+        color: string | null;
+        due: number;
+        completed: number;
+      }
+    >();
+    for (const g of groups) {
+      const subject = tasks.find((t) => t.id === g.taskId)?.subject;
+      if (!subject) continue;
+      const entry = bySubject.get(subject.id) ?? {
+        ...subject,
+        due: 0,
+        completed: 0,
       };
-    });
-  }
-
-  private async getWeakAreas(userId: string) {
-    return this.prisma.learningProgress.findMany({
-      where: { userId, mastery: { lt: 40 } },
-      include: {
-        subtopic: { include: { topic: { include: { subject: true } } } },
-      },
-      orderBy: { mastery: 'asc' },
-      take: 10,
-    });
+      entry.due += g._count._all;
+      if (g.status === 'COMPLETED') entry.completed += g._count._all;
+      bySubject.set(subject.id, entry);
+    }
+    return [...bySubject.values()].map((s) => ({
+      ...s,
+      rate: s.due ? Math.round((s.completed / s.due) * 100) : 0,
+    }));
   }
 
   private async getRecentActivity(userId: string) {
-    return this.prisma.taskSession.findMany({
-      where: { userId, status: 'completed' },
+    const items = await this.prisma.taskOccurrence.findMany({
+      where: { userId, status: 'COMPLETED' },
       include: {
-        task: { include: { subtopic: true } },
+        task: {
+          select: {
+            id: true,
+            title: true,
+            subject: { select: { title: true } },
+          },
+        },
+        taskSessions: {
+          where: { status: 'completed' },
+          select: { duration: true },
+        },
       },
-      orderBy: { finishedAt: 'desc' },
-      take: 10,
+      orderBy: { completedAt: 'desc' },
+      take: 8,
     });
+    return items.map((o) => ({
+      id: o.id,
+      title: o.task.title,
+      subject: o.task.subject.title,
+      completedAt: o.completedAt,
+      duration: o.taskSessions.reduce((sum, s) => sum + (s.duration ?? 0), 0),
+    }));
   }
 
-  private async getUpcomingRevisions(userId: string) {
-    const nextWeek = new Date();
-    nextWeek.setDate(nextWeek.getDate() + 7);
-
-    return this.prisma.revisionHistory.findMany({
-      where: {
-        userId,
-        completedAt: null,
-        scheduledFor: { lte: nextWeek },
-      },
-      include: { task: { include: { subtopic: true } } },
-      orderBy: { scheduledFor: 'asc' },
-      take: 10,
+  private async getWeakAreas(userId: string) {
+    const rows = await this.prisma.learningProgress.findMany({
+      where: { userId, mastery: { lt: 40 } },
+      orderBy: { mastery: 'asc' },
+      take: 5,
     });
-  }
-
-  private async getStreak(userId: string) {
-    return this.prisma.streak.findFirst({
-      where: { userId, type: 'daily', subjectName: null },
+    const nodes = await this.prisma.contentNode.findMany({
+      where: { id: { in: rows.map((r) => r.scopeKey) } },
+      select: { id: true, title: true },
     });
+    const subjects = await this.prisma.subject.findMany({
+      where: { id: { in: rows.map((r) => r.subjectId) } },
+      select: { id: true, title: true },
+    });
+    return rows.map((r) => ({
+      mastery: r.mastery,
+      title:
+        nodes.find((n) => n.id === r.scopeKey)?.title ??
+        subjects.find((s) => s.id === r.subjectId)?.title ??
+        '',
+      subjectId: r.subjectId,
+    }));
   }
 }

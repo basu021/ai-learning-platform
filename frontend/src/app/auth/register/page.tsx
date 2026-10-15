@@ -6,12 +6,14 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Brain, Mail, Lock, User } from "lucide-react";
+import { Brain, Mail, Lock, User, AtSign } from "lucide-react";
 import { authApi } from "@/lib/api";
+import { homeFor } from "@/lib/auth";
 
 export default function RegisterPage() {
   const router = useRouter();
   const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -22,11 +24,11 @@ export default function RegisterPage() {
     setError("");
     setLoading(true);
     try {
-      const data = await authApi.register(name, email, password);
+      const data = await authApi.register({ name, username, email, password });
       localStorage.setItem("accessToken", data.accessToken);
       localStorage.setItem("refreshToken", data.refreshToken);
       localStorage.setItem("userId", data.user.id);
-      router.push("/dashboard");
+      router.push(homeFor(data.user.role));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registration failed");
     } finally {
@@ -67,6 +69,22 @@ export default function RegisterPage() {
                   required
                 />
               </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm text-gray-400">Username</label>
+              <div className="relative">
+                <AtSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+                <Input
+                  placeholder="jane.doe"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_.-]/g, ""))}
+                  className="pl-10"
+                  minLength={3}
+                  maxLength={30}
+                  required
+                />
+              </div>
+              <p className="text-xs text-gray-500">Others use this to share subjects with you.</p>
             </div>
             <div className="space-y-2">
               <label className="text-sm text-gray-400">Email</label>

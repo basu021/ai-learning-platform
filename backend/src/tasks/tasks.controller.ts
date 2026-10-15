@@ -1,72 +1,87 @@
 import {
+  Body,
   Controller,
+  Delete,
   Get,
+  Param,
   Post,
   Put,
-  Delete,
-  Body,
-  Param,
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { TasksService } from './tasks.service';
-import { CreateTaskDto, UpdateTaskStatusDto } from './dto/create-task.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { CurrentUser } from '../common/decorators/current-user.decorator';
+import {
+  CurrentUser,
+  type AuthUser,
+} from '../common/decorators/current-user.decorator';
+import { TasksService } from './tasks.service';
+import {
+  CreateTaskDto,
+  ListTasksQuery,
+  UpdateTaskDto,
+} from './dto/create-task.dto';
 
 @Controller('api/tasks')
 @UseGuards(JwtAuthGuard)
 export class TasksController {
-  constructor(private tasksService: TasksService) {}
+  constructor(private tasks: TasksService) {}
 
   @Post()
-  create(@CurrentUser('id') userId: string, @Body() dto: CreateTaskDto) {
-    return this.tasksService.create(userId, dto);
+  create(@CurrentUser() user: AuthUser, @Body() dto: CreateTaskDto) {
+    return this.tasks.create(user, dto);
   }
 
-  @Get('today')
-  getTodaysTasks(@CurrentUser('id') userId: string) {
-    return this.tasksService.getTodaysTasks(userId);
+  @Get()
+  list(@CurrentUser() user: AuthUser, @Query() q: ListTasksQuery) {
+    return this.tasks.list(user, q);
   }
 
-  @Get('my')
-  getUserTasks(
-    @CurrentUser('id') userId: string,
-    @Query('status') status?: string,
-  ) {
-    return this.tasksService.getUserTasks(userId, status);
+  @Get('agenda')
+  agenda(@CurrentUser('id') userId: string) {
+    return this.tasks.agenda(userId);
   }
 
-  @Get('subtopic/:subtopicId')
-  findBySubtopic(
-    @Param('subtopicId') subtopicId: string,
-    @CurrentUser('id') userId: string,
-  ) {
-    return this.tasksService.findBySubtopic(subtopicId, userId);
+  @Get('history')
+  history(@CurrentUser() user: AuthUser, @Query('userId') userId?: string) {
+    return this.tasks.history(user, userId || user.id);
+  }
+
+  @Get('occurrences/:id')
+  occurrence(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.tasks.getOccurrence(user, id);
+  }
+
+  @Post('occurrences/:id/start')
+  start(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.tasks.start(user, id);
+  }
+
+  @Post('occurrences/:id/skip')
+  skip(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.tasks.skip(user, id);
+  }
+
+  @Post('sessions/:id/finish')
+  finish(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.tasks.finishSession(user, id);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.tasksService.findOne(id);
+  get(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.tasks.get(user, id);
   }
 
-  @Put(':id/status')
-  updateStatus(@Param('id') id: string, @Body() dto: UpdateTaskStatusDto) {
-    return this.tasksService.updateStatus(id, dto);
-  }
-
-  @Post(':id/start')
-  startSession(@Param('id') taskId: string, @CurrentUser('id') userId: string) {
-    return this.tasksService.startSession(taskId, userId);
-  }
-
-  @Post('session/:sessionId/finish')
-  finishSession(@Param('sessionId') sessionId: string) {
-    return this.tasksService.finishSession(sessionId);
+  @Put(':id')
+  update(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body() dto: UpdateTaskDto,
+  ) {
+    return this.tasks.update(user, id, dto);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.tasksService.remove(id);
+  remove(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.tasks.remove(user, id);
   }
 }

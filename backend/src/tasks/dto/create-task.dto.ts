@@ -1,63 +1,149 @@
+import { Type } from 'class-transformer';
 import {
-  IsString,
-  IsOptional,
-  IsInt,
-  IsUUID,
-  IsBoolean,
+  ArrayMaxSize,
+  ArrayMinSize,
+  IsArray,
+  IsDateString,
+  IsEnum,
   IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  Max,
+  MaxLength,
+  Min,
+  MinLength,
+  ValidateNested,
 } from 'class-validator';
+import { Frequency } from '@prisma/client';
+
+export class ScheduleDto {
+  @IsEnum(Frequency)
+  frequency: Frequency;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsInt({ each: true })
+  @Min(0, { each: true })
+  @Max(6, { each: true })
+  weekdays?: number[];
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(31)
+  monthDay?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(365)
+  intervalDays?: number;
+
+  @IsDateString()
+  startDate: string;
+
+  @IsOptional()
+  @IsDateString()
+  endDate?: string | null;
+}
 
 export class CreateTaskDto {
-  @IsUUID()
-  subtopicId: string;
+  @IsString()
+  subjectId: string;
+
+  @IsOptional()
+  @IsString()
+  nodeId?: string | null;
 
   @IsString()
+  @MinLength(2)
+  @MaxLength(191)
   title: string;
 
+  @IsOptional()
   @IsString()
-  description: string;
+  instructions?: string;
 
   @IsOptional()
   @IsIn(['beginner', 'intermediate', 'advanced', 'expert'])
   difficulty?: string;
 
   @IsOptional()
-  @IsIn(['practice', 'troubleshooting', 'scenario', 'revision'])
-  taskType?: string;
-
-  @IsOptional()
   @IsInt()
+  @Min(1)
+  @Max(1440)
   estimatedMins?: number;
 
   @IsOptional()
   @IsInt()
+  @Min(0)
+  @Max(1000)
+  xpReward?: number;
+
+  /** Admin only: create the task for these users (by username). Defaults to yourself. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  @IsString({ each: true })
+  assignees?: string[];
+
+  @ValidateNested()
+  @Type(() => ScheduleDto)
+  schedule: ScheduleDto;
+}
+
+export class UpdateTaskDto {
+  @IsOptional()
+  @IsString()
+  @MinLength(2)
+  @MaxLength(191)
+  title?: string;
+
+  @IsOptional()
+  @IsString()
+  instructions?: string;
+
+  @IsOptional()
+  @IsIn(['beginner', 'intermediate', 'advanced', 'expert'])
+  difficulty?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(1440)
+  estimatedMins?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(1000)
   xpReward?: number;
 
   @IsOptional()
-  @IsBoolean()
-  isRevision?: boolean;
+  @IsString()
+  nodeId?: string | null;
 
   @IsOptional()
-  @IsString()
-  hints?: string;
+  @ValidateNested()
+  @Type(() => ScheduleDto)
+  schedule?: ScheduleDto;
 
   @IsOptional()
-  @IsString()
-  commands?: string;
-
-  @IsOptional()
-  @IsString()
-  tags?: string;
+  active?: boolean;
 }
 
-export class UpdateTaskStatusDto {
-  @IsIn([
-    'pending',
-    'started',
-    'in_progress',
-    'completed',
-    'skipped',
-    'revision_required',
-  ])
-  status: string;
+export class ListTasksQuery {
+  @IsOptional()
+  @IsIn(['mine', 'assigned', 'all'])
+  scope?: 'mine' | 'assigned' | 'all';
+
+  @IsOptional()
+  @IsString()
+  assigneeId?: string;
+
+  @IsOptional()
+  @IsString()
+  subjectId?: string;
 }

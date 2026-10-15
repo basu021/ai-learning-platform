@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, UseGuards } from '@nestjs/common';
 import { FeedbackService } from './feedback.service';
 import { CreateFeedbackDto } from './dto/create-feedback.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -12,11 +12,6 @@ export class FeedbackController {
   @Post()
   create(@CurrentUser('id') userId: string, @Body() dto: CreateFeedbackDto) {
     return this.feedbackService.create(userId, dto);
-  }
-
-  @Get('task/:taskId')
-  findByTask(@Param('taskId') taskId: string) {
-    return this.feedbackService.findByTask(taskId);
   }
 
   @Get('my')

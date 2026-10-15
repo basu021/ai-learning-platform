@@ -1,19 +1,21 @@
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
 import { Request } from 'express';
+import type { Role } from '@prisma/client';
 
-interface AuthenticatedUser {
+export interface AuthUser {
   id: string;
   email: string;
   name: string;
-  [key: string]: unknown;
+  username: string;
+  role: Role;
 }
 
 export const CurrentUser = createParamDecorator(
-  (data: string | undefined, ctx: ExecutionContext) => {
+  (data: keyof AuthUser | undefined, ctx: ExecutionContext) => {
     const request = ctx.switchToHttp().getRequest<Request>();
-    const user = request.user as AuthenticatedUser | undefined;
+    const user = request.user as AuthUser | undefined;
     if (data) {
-      return user?.[data] as string | undefined;
+      return user?.[data];
     }
     return user;
   },

@@ -1,4 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { GamificationService } from '../gamification/gamification.service';
 import { CreateFeedbackDto } from './dto/create-feedback.dto';
@@ -10,45 +14,71 @@ export class FeedbackService {
     private gamification: GamificationService,
   ) {}
 
+  /** Submitting feedback completes the occurrence and awards XP. */
   async create(userId: string, dto: CreateFeedbackDto) {
+    const occ = await this.prisma.taskOccurrence.findUnique({
+      where: { id: dto.occurrenceId },
+      include: { task: true },
+    });
+    if (!occ || occ.userId !== userId) {
+      throw new NotFoundException('Practice item not found');
+    }
+    if (occ.status === 'COMPLETED') {
+      throw new BadRequestException('Already completed');
+    }
+
+    const now = new Date();
+    const active = await this.prisma.taskSession.findFirst({
+      where: { occurrenceId: occ.id, status: 'active' },
+    });
+    if (active) {
+      await this.prisma.taskSession.update({
+        where: { id: active.id },
+        data: {
+          finishedAt: now,
+          duration: Math.floor(
+            (now.getTime() - active.startedAt.getTime()) / 1000,
+          ),
+          status: 'completed',
+        },
+      });
+    }
+
     const feedback = await this.prisma.feedback.create({
       data: { ...dto, userId },
     });
-
-    await this.prisma.task.update({
-      where: { id: dto.taskId },
-      data: { status: 'completed' },
+    await this.prisma.taskOccurrence.update({
+      where: { id: occ.id },
+      data: { status: 'COMPLETED', completedAt: now },
     });
 
-    const task = await this.prisma.task.findUnique({
-      where: { id: dto.taskId },
-    });
-    if (task?.xpReward) {
+    if (occ.task.xpReward) {
       await this.gamification.awardXp(
         userId,
-        task.xpReward,
+        occ.task.xpReward,
         'task_completion',
-        task.id,
+        occ.id,
       );
     }
     await this.gamification.updateStreak(userId);
-
-    await this.updateLearningProgress(userId, dto.taskId, dto.confidenceLevel);
+    await this.updateLearningProgress(
+      userId,
+      occ.id,
+      occ.task,
+      dto.confidenceLevel,
+    );
 
     return feedback;
-  }
-
-  async findByTask(taskId: string) {
-    return this.prisma.feedback.findMany({
-      where: { taskId },
-      orderBy: { createdAt: 'desc' },
-    });
   }
 
   async findByUser(userId: string) {
     return this.prisma.feedback.findMany({
       where: { userId },
-      include: { task: { include: { subtopic: true } } },
+      include: {
+        occurrence: {
+          include: { task: { select: { id: true, title: true } } },
+        },
+      },
       orderBy: { createdAt: 'desc' },
       take: 20,
     });
@@ -56,58 +86,47 @@ export class FeedbackService {
 
   private async updateLearningProgress(
     userId: string,
-    taskId: string,
+    occurrenceId: string,
+    task: { subjectId: string; nodeId: string | null },
     confidence: number,
   ) {
-    const task = await this.prisma.task.findUnique({
-      where: { id: taskId },
-      include: { taskSessions: { orderBy: { startedAt: 'desc' }, take: 1 } },
+    const sessions = await this.prisma.taskSession.findMany({
+      where: { occurrenceId, status: 'completed' },
+      select: { duration: true },
     });
-    if (!task) return;
+    const timeSpent = sessions.reduce((sum, s) => sum + (s.duration ?? 0), 0);
+    const scopeKey = task.nodeId ?? task.subjectId;
 
     const existing = await this.prisma.learningProgress.findUnique({
-      where: { userId_subtopicId: { userId, subtopicId: task.subtopicId } },
+      where: { userId_scopeKey: { userId, scopeKey } },
     });
+    const n = (existing?.tasksCompleted ?? 0) + 1;
+    const avgConfidence =
+      ((existing?.avgConfidence ?? 0) * (n - 1) + confidence) / n;
+    const avgTimeSpent =
+      ((existing?.avgTimeSpent ?? 0) * (n - 1) + timeSpent) / n;
+    // Confidence-weighted, ramping up with practice count.
+    const mastery = Math.min(100, (avgConfidence / 5) * 100 * (n / (n + 5)));
 
-    const timeSpent = task.taskSessions[0]?.duration || 0;
-
-    if (existing) {
-      const newTasksCompleted = existing.tasksCompleted + 1;
-      const newAvgConfidence =
-        (existing.avgConfidence * existing.tasksCompleted + confidence) /
-        newTasksCompleted;
-      const newAvgTimeSpent =
-        (existing.avgTimeSpent * existing.tasksCompleted + timeSpent) /
-        newTasksCompleted;
-      const newMastery = Math.min(
-        100,
-        (newAvgConfidence / 5) *
-          100 *
-          (newTasksCompleted / (newTasksCompleted + 5)),
-      );
-
-      await this.prisma.learningProgress.update({
-        where: { id: existing.id },
-        data: {
-          tasksCompleted: newTasksCompleted,
-          avgConfidence: newAvgConfidence,
-          avgTimeSpent: newAvgTimeSpent,
-          mastery: newMastery,
-          lastPracticedAt: new Date(),
-        },
-      });
-    } else {
-      await this.prisma.learningProgress.create({
-        data: {
-          userId,
-          subtopicId: task.subtopicId,
-          tasksCompleted: 1,
-          avgConfidence: confidence,
-          avgTimeSpent: timeSpent,
-          mastery: (confidence / 5) * 100 * (1 / 6),
-          lastPracticedAt: new Date(),
-        },
-      });
-    }
+    await this.prisma.learningProgress.upsert({
+      where: { userId_scopeKey: { userId, scopeKey } },
+      create: {
+        userId,
+        subjectId: task.subjectId,
+        scopeKey,
+        tasksCompleted: 1,
+        avgConfidence,
+        avgTimeSpent,
+        mastery,
+        lastPracticedAt: new Date(),
+      },
+      update: {
+        tasksCompleted: n,
+        avgConfidence,
+        avgTimeSpent,
+        mastery,
+        lastPracticedAt: new Date(),
+      },
+    });
   }
 }

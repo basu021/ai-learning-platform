@@ -28,13 +28,13 @@ const subjects = [
 const features = [
   {
     icon: Brain,
-    title: "AI-Powered Tasks",
-    description: "Automatically generated practical tasks that adapt to your skill level and learning pace.",
+    title: "Structured Learning Paths",
+    description: "Organise knowledge as subjects, chapters, topics and subtopics with a rich editor, attachments and version history.",
   },
   {
     icon: Target,
-    title: "Spaced Repetition",
-    description: "Intelligent revision scheduling ensures concepts move from short-term to long-term memory.",
+    title: "Scheduled Practice",
+    description: "Practise any chapter, topic or subtopic daily, weekly, monthly or every few days, and track what you are working on.",
   },
   {
     icon: Flame,
@@ -77,7 +77,7 @@ export default function LandingPage() {
             <div className="inline-flex items-center gap-2 rounded-full bg-indigo-500/10 border border-indigo-500/20 px-4 py-1.5 mb-6">
               <Zap className="h-3.5 w-3.5 text-indigo-400" />
               <span className="text-xs font-medium text-indigo-300">
-                AI-Powered Technical Training
+                Technical Training Platform
               </span>
             </div>
             <h1 className="text-5xl md:text-7xl font-bold mb-6 leading-tight">
@@ -87,7 +87,7 @@ export default function LandingPage() {
               </span>
             </h1>
             <p className="text-lg text-gray-400 max-w-2xl mx-auto mb-10">
-              AI-generated practice tasks, spaced repetition, and gamified progression
+              Curated learning content, scheduled practice, and gamified progression
               for Linux admins, DBAs, DevOps engineers, and infrastructure professionals.
             </p>
             <div className="flex items-center justify-center gap-4">
@@ -158,7 +158,7 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="border-t border-gray-800 py-8 text-center">
         <p className="text-sm text-gray-500">
-          SkillForge &mdash; AI-Powered Technical Training Platform
+          SkillForge &mdash; Technical Training Platform Platform
         </p>
       </footer>
     </div>

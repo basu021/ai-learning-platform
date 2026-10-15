@@ -2,7 +2,7 @@ import { IsString, IsOptional, IsInt, IsUUID, Min, Max } from 'class-validator';
 
 export class CreateFeedbackDto {
   @IsUUID()
-  taskId: string;
+  occurrenceId: string;
 
   @IsOptional()
   @IsString()
