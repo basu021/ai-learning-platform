@@ -219,7 +219,15 @@ export function TaskFormModal({
       difficulty,
       estimatedMins: estimatedMins === "" ? undefined : estimatedMins,
       xpReward,
-      schedule,
+      // Send only the fields that belong to the chosen frequency.
+      schedule: {
+        frequency: schedule.frequency,
+        startDate: schedule.startDate,
+        endDate: schedule.endDate,
+        weekdays: schedule.frequency === "WEEKLY" ? schedule.weekdays : undefined,
+        monthDay: schedule.frequency === "MONTHLY" ? schedule.monthDay : undefined,
+        intervalDays: schedule.frequency === "CUSTOM" ? schedule.intervalDays : undefined,
+      },
     };
     try {
       if (task) {

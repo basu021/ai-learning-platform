@@ -1,7 +1,6 @@
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
-  ArrayMinSize,
   IsArray,
   IsDateString,
   IsEnum,
@@ -21,9 +20,9 @@ export class ScheduleDto {
   @IsEnum(Frequency)
   frequency: Frequency;
 
+  /** Only used for WEEKLY; the service requires at least one there. */
   @IsOptional()
   @IsArray()
-  @ArrayMinSize(1)
   @IsInt({ each: true })
   @Min(0, { each: true })
   @Max(6, { each: true })
