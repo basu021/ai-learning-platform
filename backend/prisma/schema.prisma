@@ -56,6 +56,13 @@ enum Frequency {
   CUSTOM
 }
 
+enum StudyEventType {
+  OPEN
+  COMPLETE
+  UNCOMPLETE
+  RESET
+}
+
 enum OccurrenceStatus {
   PENDING
   IN_PROGRESS
@@ -103,6 +110,9 @@ model User {
   xpHistory        XpHistory[]
   learningProgress LearningProgress[]
   notifications    Notification[]
+  readProgress     ReadProgress[]
+  studyEvents      StudyEvent[]
+  studyTime        StudyTime[]
 
   @@map("users")
 }
@@ -128,6 +138,8 @@ model Subject {
   categoryId  String?       @map("category_id")
   tags        String?       @db.VarChar(500) // comma separated
   color       String?       @default("#6366f1")
+  // Last change to title/summary/content; drives "updated since you read it".
+  contentUpdatedAt DateTime   @default(now()) @map("content_updated_at")
   createdAt   DateTime      @default(now()) @map("created_at")
   updatedAt   DateTime      @updatedAt @map("updated_at")
   deletedAt   DateTime?     @map("deleted_at")
@@ -158,6 +170,9 @@ model ContentNode {
   content   String?   @db.LongText
   order     Int       @default(0)
   isPreview Boolean   @default(false) @map("is_preview") // visible to everyone on LISTED subjects
+  hasContent Boolean  @default(false) @map("has_content")
+  // Last change to title/summary/content (not order/preview); drives "updated since you read it".
+  contentUpdatedAt DateTime @default(now()) @map("content_updated_at")
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
@@ -466,4 +481,57 @@ model Notification {
 
   @@index([userId, read])
   @@map("notifications")
+}
+
+// Reading state per user and item (subject overview: nodeId null, scopeKey = subjectId).
+model ReadProgress {
+  id            String    @id @default(uuid())
+  userId        String    @map("user_id")
+  subjectId     String    @map("subject_id")
+  nodeId        String?   @map("node_id")
+  scopeKey      String    @map("scope_key")
+  firstOpenedAt DateTime? @map("first_opened_at") // cleared on reset, so it marks the current attempt
+  lastOpenedAt  DateTime? @map("last_opened_at")
+  completedAt   DateTime? @map("completed_at")
+  timeSpentSec  Int       @default(0) @map("time_spent_sec") // lifetime, survives resets
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, scopeKey])
+  @@index([userId, subjectId])
+  @@map("read_progress")
+}
+
+// Append-only study log for later analytics (time to complete, re-reads, resets).
+model StudyEvent {
+  id        String         @id @default(uuid())
+  userId    String         @map("user_id")
+  subjectId String         @map("subject_id")
+  nodeId    String?        @map("node_id")
+  type      StudyEventType
+  createdAt DateTime       @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, subjectId, createdAt])
+  @@map("study_events")
+}
+
+// Reading time per user, item and day.
+model StudyTime {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  subjectId String   @map("subject_id")
+  nodeId    String?  @map("node_id")
+  scopeKey  String   @map("scope_key")
+  day       DateTime @db.Date
+  seconds   Int      @default(0)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, scopeKey, day])
+  @@index([userId, subjectId, day])
+  @@map("study_time")
 }

@@ -1,27 +1,37 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { TasksService } from '../tasks/tasks.service';
+import { ProgressService } from '../subjects/progress.service';
 
 @Injectable()
 export class DashboardService {
   constructor(
     private prisma: PrismaService,
     private tasks: TasksService,
+    private progress: ProgressService,
   ) {}
 
   async getDashboard(userId: string) {
-    const [agenda, user, streak, subjectProgress, recentActivity, weakAreas] =
-      await Promise.all([
-        this.tasks.agenda(userId),
-        this.prisma.user.findUnique({
-          where: { id: userId },
-          select: { totalXp: true, level: true, name: true, role: true },
-        }),
-        this.prisma.streak.findFirst({ where: { userId, type: 'daily' } }),
-        this.getSubjectProgress(userId),
-        this.getRecentActivity(userId),
-        this.getWeakAreas(userId),
-      ]);
+    const [
+      agenda,
+      user,
+      streak,
+      subjectProgress,
+      recentActivity,
+      weakAreas,
+      reading,
+    ] = await Promise.all([
+      this.tasks.agenda(userId),
+      this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { totalXp: true, level: true, name: true, role: true },
+      }),
+      this.prisma.streak.findFirst({ where: { userId, type: 'daily' } }),
+      this.getSubjectProgress(userId),
+      this.getRecentActivity(userId),
+      this.getWeakAreas(userId),
+      this.progress.recent(userId),
+    ]);
 
     const done = agenda.todayItems.filter(
       (o) => o.status === 'COMPLETED',
@@ -34,6 +44,7 @@ export class DashboardService {
       subjectProgress,
       recentActivity,
       weakAreas,
+      reading,
     };
   }
 

@@ -12,6 +12,7 @@ import type { AuthUser } from '../common/decorators/current-user.decorator';
 import { sanitizeRich } from '../common/utils/sanitize';
 import { AccessService } from './access.service';
 import { ContentService } from './content.service';
+import { ProgressService } from './progress.service';
 import {
   CreateSubjectDto,
   ListSubjectsQuery,
@@ -40,6 +41,7 @@ export class SubjectsService {
     private access: AccessService,
     private content: ContentService,
     private notifications: NotificationsService,
+    private progress: ProgressService,
   ) {}
 
   // ------------------------------------------------------------- library
@@ -133,7 +135,7 @@ export class SubjectsService {
     });
     const requested = new Set(pendingRequests.map((r) => r.subjectId));
 
-    return subjects.map(({ members, _count, ...s }) => {
+    const items = subjects.map(({ members, _count, ...s }) => {
       const isOwner = s.ownerId === user.id;
       const memberRole = members[0]?.role ?? null;
       const canManage = isAdmin || isOwner;
@@ -156,6 +158,13 @@ export class SubjectsService {
         },
       };
     });
+
+    // Reading progress only where the user can actually read the content.
+    const progress = await this.progress.summaries(
+      user.id,
+      items.filter((i) => i.access.hasAccess).map((i) => i.id),
+    );
+    return items.map((i) => ({ ...i, progress: progress[i.id] ?? null }));
   }
 
   async create(user: AuthUser, dto: CreateSubjectDto) {

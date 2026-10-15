@@ -14,11 +14,22 @@ import { TaskFormModal } from "@/components/tasks/task-form";
 import { TaskMeta } from "@/components/tasks/agenda";
 import { Breadcrumb } from "@/components/content/breadcrumb";
 import { AccessBadge, VisibilityBadge } from "@/components/content/badges";
-import { adminApi, tasksApi, type AdminUserDetail, type OccurrenceItem, type TaskDetail } from "@/lib/api";
+import { adminApi, progressApi, tasksApi, type AdminUserDetail, type OccurrenceItem, type Rollup, type TaskDetail } from "@/lib/api";
+import { ProgressTick } from "@/components/progress/progress";
 import { useSession } from "@/lib/auth";
 import { formatDay, timeAgo } from "@/lib/utils";
 
 type Tab = "subjects" | "tasks" | "history";
+
+/** Reading progress of this user for one subject. */
+function ReadPct({ p }: { p?: Rollup }) {
+  if (!p || p.total === 0) return null;
+  return (
+    <span className="flex items-center gap-1 text-[11px] text-gray-400" title={`${p.done}/${p.total} read${p.outdated ? `, ${p.outdated} updated since` : ""}`}>
+      <ProgressTick state={p.state} percent={p.percent} /> {p.percent}%
+    </span>
+  );
+}
 
 function Detail() {
   const { id } = useParams<{ id: string }>();
@@ -28,6 +39,7 @@ function Detail() {
   const [tasks, setTasks] = useState<TaskDetail[]>([]);
   const [history, setHistory] = useState<(OccurrenceItem & { confidence: number | null })[]>([]);
   const [tab, setTab] = useState<Tab>("subjects");
+  const [reading, setReading] = useState<Record<string, Rollup>>({});
   const [taskOpen, setTaskOpen] = useState(false);
   const [editing, setEditing] = useState<TaskDetail | null>(null);
   const [pwOpen, setPwOpen] = useState(false);
@@ -37,6 +49,7 @@ function Detail() {
     adminApi.user(id).then(setUser).catch(toast.error);
     tasksApi.list({ scope: "all", assigneeId: id }).then(setTasks).catch(() => {});
     tasksApi.history(id).then(setHistory).catch(() => {});
+    progressApi.forUser(id).then(setReading).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
   useEffect(load, [load]);
@@ -99,6 +112,7 @@ function Detail() {
                 {user.owned.map((s) => (
                   <li key={s.id} className="flex items-center gap-2 px-4 py-2.5 text-sm">
                     <Link href={`/subjects/${s.id}`} className="flex-1 truncate text-gray-200 hover:text-indigo-300">{s.title}</Link>
+                    <ReadPct p={reading[s.id]} />
                     <VisibilityBadge value={s.visibility} />
                     <span className="text-[11px] text-gray-500">{timeAgo(s.updatedAt)}</span>
                   </li>
@@ -115,6 +129,7 @@ function Detail() {
                 {user.memberships.map((m) => (
                   <li key={m.id} className="flex items-center gap-2 px-4 py-2.5 text-sm">
                     <Link href={`/subjects/${m.subject.id}`} className="flex-1 truncate text-gray-200 hover:text-indigo-300">{m.subject.title}</Link>
+                    <ReadPct p={reading[m.subject.id]} />
                     <AccessBadge role={m.role} />
                     <span className="text-[11px] text-gray-500">by @{m.grantedBy?.username ?? "?"}</span>
                   </li>

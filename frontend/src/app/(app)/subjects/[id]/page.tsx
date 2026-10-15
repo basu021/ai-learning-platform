@@ -15,6 +15,9 @@ import {
   ChevronRight,
   Clock,
   Info,
+  CheckCircle2,
+  RefreshCw,
+  RotateCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -27,8 +30,9 @@ import { Breadcrumb } from "@/components/content/breadcrumb";
 import { AttachmentsPanel } from "@/components/content/attachments-panel";
 import { AccessBadge, StatusBadge, TagList, VisibilityBadge } from "@/components/content/badges";
 import { TaskFormModal } from "@/components/tasks/task-form";
-import { subjectsApi, type NodeDetail, type NodeType, type OutlineNode, type SubjectDetail } from "@/lib/api";
-import { CHILD_TYPE, NODE_LABEL, timeAgo } from "@/lib/utils";
+import { progressApi, subjectsApi, type ItemState, type NodeDetail, type NodeType, type OutlineNode, type SubjectDetail, type SubjectProgress } from "@/lib/api";
+import { ProgressBar, ProgressTick, useStudyTracker } from "@/components/progress/progress";
+import { CHILD_TYPE, NODE_LABEL, formatDate, timeAgo } from "@/lib/utils";
 
 function RequestAccess({ subject, onDone }: { subject: SubjectDetail; onDone: () => void }) {
   const toast = useToast();
@@ -90,6 +94,54 @@ function RequestAccess({ subject, onDone }: { subject: SubjectDetail; onDone: ()
   );
 }
 
+function ReadBar({
+  own,
+  completedAt,
+  label,
+  busy,
+  onComplete,
+  onUncomplete,
+}: {
+  own: ItemState;
+  completedAt: string | null;
+  label: string;
+  busy: boolean;
+  onComplete: () => void;
+  onUncomplete: () => void;
+}) {
+  if (own === "done") {
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-500/25 bg-emerald-500/5 px-4 py-3">
+        <span className="flex items-center gap-2 text-sm text-emerald-300">
+          <CheckCircle2 className="h-5 w-5" /> You read this {label}
+          {completedAt && <span className="text-xs text-emerald-400/60">on {formatDate(completedAt)}</span>}
+        </span>
+        <Button size="sm" variant="ghost" onClick={onUncomplete} disabled={busy}>Mark as unread</Button>
+      </div>
+    );
+  }
+  if (own === "outdated") {
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-orange-500/30 bg-orange-500/5 px-4 py-3">
+        <span className="flex items-center gap-2 text-sm text-orange-200">
+          <RefreshCw className="h-5 w-5 text-orange-400" /> This {label} was updated after you read it. Read the changes, then mark it again.
+        </span>
+        <Button size="sm" onClick={onComplete} disabled={busy} className="bg-orange-600 shadow-orange-500/25 hover:bg-orange-700">
+          <CheckCircle2 className="mr-1 h-4 w-4" /> Mark as read again
+        </Button>
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-800 bg-gray-900/40 px-4 py-3">
+      <span className="text-sm text-gray-400">Finished reading this {label}?</span>
+      <Button size="sm" variant="success" onClick={onComplete} disabled={busy}>
+        <CheckCircle2 className="mr-1 h-4 w-4" /> Mark as read
+      </Button>
+    </div>
+  );
+}
+
 function SubjectView() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -101,10 +153,17 @@ function SubjectView() {
   const [node, setNode] = useState<NodeDetail | null>(null);
   const [error, setError] = useState("");
   const [taskOpen, setTaskOpen] = useState(false);
+  const [progress, setProgress] = useState<SubjectProgress | null>(null);
+  const [marking, setMarking] = useState(false);
+
+  const loadProgress = useCallback(() => {
+    progressApi.get(id).then(setProgress).catch(() => setProgress(null));
+  }, [id]);
 
   const loadSubject = useCallback(() => {
+    loadProgress();
     return subjectsApi.get(id).then(setSubject).catch((e: Error) => setError(e.message));
-  }, [id]);
+  }, [id, loadProgress]);
 
   const loadNode = useCallback(() => {
     if (!nodeId) {
@@ -121,6 +180,9 @@ function SubjectView() {
   useEffect(() => {
     loadNode();
   }, [loadNode]);
+
+  // Reading time is recorded for whatever readable item is on screen.
+  useStudyTracker(id, nodeId, !!subject?.access.canView && !node?.locked);
 
   if (error) {
     return (
@@ -157,6 +219,43 @@ function SubjectView() {
   const showing = node ?? null;
   const locked = showing?.locked ?? false;
   const childType = CHILD_TYPE[showing ? showing.type : "SUBJECT"];
+  // Progress of the item on screen: its own read state and the rollup of everything under it.
+  const nodeProgress = showing ? progress?.nodes[showing.id] : undefined;
+  const rollup = showing ? nodeProgress : progress;
+  const ownState: ItemState | null = locked ? null : showing ? (nodeProgress?.own ?? null) : (progress?.overview ?? null);
+
+  const mark = async (complete: boolean) => {
+    setMarking(true);
+    try {
+      const next = complete
+        ? await progressApi.complete(id, showing?.id ?? null)
+        : await progressApi.uncomplete(id, showing?.id ?? null);
+      setProgress(next);
+      if (complete && showing) {
+        const d = next.nodes[showing.id];
+        if (d?.state === "done" && showing.parentId) toast.success(`${NODE_LABEL[showing.type]} complete`);
+      }
+      if (complete && next.state === "done") toast.success(`You've completed ${subject.title}!`);
+    } catch (e) {
+      toast.error(e);
+    } finally {
+      setMarking(false);
+    }
+  };
+
+  const startOver = async () => {
+    const what = showing ? `this ${NODE_LABEL[showing.type].toLowerCase()} and everything in it` : "the whole subject";
+    if (!confirm(`Clear your read marks for ${what} and start over? Your reading time history is kept.`)) return;
+    setMarking(true);
+    try {
+      setProgress(await progressApi.reset(id, showing?.id ?? null));
+      toast.info("Progress reset — start over whenever you're ready");
+    } catch (e) {
+      toast.error(e);
+    } finally {
+      setMarking(false);
+    }
+  };
   const editHref = showing ? `/subjects/${id}/edit?node=${showing.id}` : `/subjects/${id}/edit`;
   const children: { id: string; title: string; summary: string | null; locked: boolean }[] = showing
     ? showing.children.map((c) => ({ ...c, locked: false }))
@@ -199,6 +298,7 @@ function SubjectView() {
           >
             <span className="h-3 w-3 shrink-0 rounded-sm" style={{ background: subject.color || "#6366f1" }} />
             <span className="truncate">{subject.title}</span>
+            {progress && <ProgressTick state={progress.state} percent={progress.percent} showEmpty={false} className="ml-auto" />}
           </Link>
           <OutlineTree
             key={subject.updatedAt + subject.outline.length}
@@ -207,6 +307,7 @@ function SubjectView() {
             onSelect={select}
             onAdd={a.canEdit ? addChild : undefined}
             showPreviewMarks={a.canManage && subject.visibility === "LISTED"}
+            progress={progress?.nodes}
           />
           {a.editsNeedApproval && (
             <p className="mt-3 flex gap-1.5 px-2 text-[11px] text-gray-500">
@@ -249,6 +350,16 @@ function SubjectView() {
             {(showing ? showing.summary : subject.summary) && (
               <p className="text-base text-gray-400">{showing ? showing.summary : subject.summary}</p>
             )}
+            {progress && rollup && rollup.total > (ownState ? 1 : 0) && (
+              <div className="flex flex-wrap items-end gap-3 pt-1">
+                <ProgressBar p={rollup} className="min-w-[220px] flex-1" />
+                {(rollup.done > 0 || rollup.outdated > 0) && (
+                  <Button size="sm" variant="ghost" onClick={startOver} disabled={marking} title="Clear read marks and start again">
+                    <RotateCcw className="mr-1 h-3.5 w-3.5" /> Start over
+                  </Button>
+                )}
+              </div>
+            )}
             {showing && a.canManage && showing.pendingChanges > 0 && (
               <Link href={`/subjects/${id}/manage?tab=changes`} className="inline-flex items-center gap-1.5 rounded-md bg-amber-500/10 px-2.5 py-1 text-xs text-amber-300 hover:bg-amber-500/20">
                 <GitPullRequest className="h-3.5 w-3.5" /> {showing.pendingChanges} proposed change{showing.pendingChanges > 1 ? "s" : ""} to review
@@ -282,6 +393,17 @@ function SubjectView() {
                 )
               )}
 
+              {progress && ownState && (showing !== null || !nodeId) && (
+                <ReadBar
+                  own={ownState}
+                  completedAt={showing ? (progress.nodes[showing.id]?.completedAt ?? null) : progress.overviewCompletedAt}
+                  label={showing ? NODE_LABEL[showing.type].toLowerCase() : "overview"}
+                  busy={marking}
+                  onComplete={() => mark(true)}
+                  onUncomplete={() => mark(false)}
+                />
+              )}
+
               {childType && (children.length > 0 || a.canEdit) && (
                 <section>
                   <h2 className="mb-2 text-sm font-semibold text-gray-300">
@@ -303,6 +425,12 @@ function SubjectView() {
                           </p>
                           {c.summary && <p className="truncate text-xs text-gray-500">{c.summary}</p>}
                         </div>
+                        {progress?.nodes[c.id] && !c.locked && (
+                          <span className="flex items-center gap-1.5 text-xs text-gray-500">
+                            {progress.nodes[c.id].total > 1 && progress.nodes[c.id].state !== "none" && `${progress.nodes[c.id].percent}%`}
+                            <ProgressTick state={progress.nodes[c.id].state} percent={progress.nodes[c.id].percent} className="h-4 w-4" />
+                          </span>
+                        )}
                         <ChevronRight className="h-4 w-4 text-gray-600" />
                       </Link>
                     ))}

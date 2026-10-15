@@ -48,6 +48,14 @@ function cleanFields(fields: ContentFields): ContentFields {
   return out;
 }
 
+/** True if applying `fields` would alter title, summary or content. */
+function changes(current: ContentFields, fields: ContentFields) {
+  return (['title', 'summary', 'content'] as const).some(
+    (k) =>
+      fields[k] !== undefined && (fields[k] ?? null) !== (current[k] ?? null),
+  );
+}
+
 function snapshotOf(entity: {
   title: string;
   summary: string | null;
@@ -197,6 +205,7 @@ export class ContentService {
           title: p.title,
           summary: p.summary ?? null,
           content: p.content ?? null,
+          hasContent: !!p.content,
           order: siblings,
         },
       });
@@ -231,6 +240,7 @@ export class ContentService {
       const node = await tx.contentNode.findFirstOrThrow({
         where: { id: nodeId, subjectId, deletedAt: null },
       });
+      if (!changes(node, fields)) return node;
       await this.record(
         tx,
         subjectId,
@@ -240,11 +250,21 @@ export class ContentService {
         actorId,
         note,
       );
-      return tx.contentNode.update({ where: { id: nodeId }, data: fields });
+      return tx.contentNode.update({
+        where: { id: nodeId },
+        data: {
+          ...fields,
+          ...(fields.content !== undefined
+            ? { hasContent: !!fields.content }
+            : {}),
+          contentUpdatedAt: new Date(),
+        },
+      });
     }
     const subject = await tx.subject.findUniqueOrThrow({
       where: { id: subjectId },
     });
+    if (!changes(subject, fields)) return subject;
     await this.record(
       tx,
       subjectId,
@@ -254,7 +274,10 @@ export class ContentService {
       actorId,
       note,
     );
-    return tx.subject.update({ where: { id: subjectId }, data: fields });
+    return tx.subject.update({
+      where: { id: subjectId },
+      data: { ...fields, contentUpdatedAt: new Date() },
+    });
   }
 
   private async record(

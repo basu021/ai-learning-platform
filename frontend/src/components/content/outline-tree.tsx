@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { ChevronRight, Lock, Plus, BookOpen, FileText, Hash, Sparkles } from "lucide-react";
-import type { NodeType, OutlineNode } from "@/lib/api";
+import type { NodeProgress, NodeType, OutlineNode } from "@/lib/api";
+import { ProgressTick } from "@/components/progress/progress";
 import { cn, CHILD_TYPE, NODE_LABEL } from "@/lib/utils";
 
 const ICONS: Record<NodeType, React.ComponentType<{ className?: string }>> = {
@@ -34,6 +35,7 @@ export function OutlineTree({
   onSelect,
   onAdd,
   showPreviewMarks,
+  progress,
 }: {
   nodes: OutlineNode[];
   selectedId: string | null;
@@ -41,6 +43,8 @@ export function OutlineTree({
   /** Show "+" to add a child under a node (or under the subject when parent is null). */
   onAdd?: (parent: OutlineNode | null, type: NodeType) => void;
   showPreviewMarks?: boolean;
+  /** Reading progress per node id; shows ticks when provided. */
+  progress?: Record<string, NodeProgress>;
 }) {
   const [open, setOpen] = useState<Set<string>>(() => collectOpen(nodes, selectedId));
   const toggle = (id: string) =>
@@ -83,6 +87,9 @@ export function OutlineTree({
               <Icon className={cn("h-3.5 w-3.5 shrink-0", n.locked ? "text-gray-600" : "text-gray-500")} />
               <span className={cn("truncate", n.locked && "text-gray-500")}>{n.title}</span>
               {n.locked && <Lock className="h-3 w-3 shrink-0 text-gray-600" />}
+              {progress?.[n.id] && !n.locked && (
+                <ProgressTick state={progress[n.id].state} percent={progress[n.id].percent} showEmpty={false} className="ml-auto" />
+              )}
               {showPreviewMarks && n.isPreview && (
                 <span title="Visible in catalog preview"><Sparkles className="h-3 w-3 shrink-0 text-sky-400" /></span>
               )}

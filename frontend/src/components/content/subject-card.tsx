@@ -3,6 +3,7 @@ import { BookOpen, Users, GitPullRequest, KeyRound, Lock } from "lucide-react";
 import type { SubjectListItem } from "@/lib/api";
 import { timeAgo } from "@/lib/utils";
 import { AccessBadge, StatusBadge, TagList, VisibilityBadge } from "./badges";
+import { ProgressBar, ProgressTick } from "@/components/progress/progress";
 
 export function SubjectCard({ s, onTag }: { s: SubjectListItem; onTag?: (t: string) => void }) {
   return (
@@ -21,14 +22,18 @@ export function SubjectCard({ s, onTag }: { s: SubjectListItem; onTag?: (t: stri
           {s.category && <span className="ml-auto text-[11px] text-gray-500">{s.category.name}</span>}
         </div>
         <div>
-          <Link href={`/subjects/${s.id}`} className="text-base font-semibold text-gray-100 after:absolute after:inset-0 group-hover:text-indigo-300">
-            {s.title}
+          <Link href={`/subjects/${s.id}`} className="flex items-start gap-2 text-base font-semibold text-gray-100 after:absolute after:inset-0 group-hover:text-indigo-300">
+            <span className="flex-1">{s.title}</span>
+            {s.progress && (s.progress.state === "done" || s.progress.state === "outdated") && (
+              <ProgressTick state={s.progress.state} className="mt-1 h-4 w-4" />
+            )}
           </Link>
           {s.summary && <p className="mt-1 line-clamp-2 text-sm text-gray-400">{s.summary}</p>}
         </div>
         <div className="relative z-10">
           <TagList tags={s.tags} onClick={onTag} />
         </div>
+        {s.progress && s.progress.total > 0 && <ProgressBar p={s.progress} className="mt-auto" />}
         <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-gray-800 pt-3 text-[11px] text-gray-500">
           <span className="flex items-center gap-1"><BookOpen className="h-3 w-3" /> {s.chapterCount} chapters</span>
           {s.access.canManage && <span className="flex items-center gap-1"><Users className="h-3 w-3" /> {s.memberCount}</span>}

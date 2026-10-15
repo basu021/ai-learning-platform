@@ -142,6 +142,29 @@ export interface Category {
   _count?: { subjects: number };
 }
 
+export type ItemState = "unread" | "opened" | "done" | "outdated";
+export type RollupState = "none" | "progress" | "done" | "outdated";
+
+export interface Rollup {
+  total: number;
+  done: number;
+  outdated: number;
+  percent: number;
+  state: RollupState;
+}
+
+export interface NodeProgress extends Rollup {
+  own: ItemState | null;
+  completedAt: string | null;
+  timeSpentSec: number;
+}
+
+export interface SubjectProgress extends Rollup {
+  overview: ItemState | null;
+  overviewCompletedAt: string | null;
+  nodes: Record<string, NodeProgress>;
+}
+
 export interface SubjectListItem {
   id: string;
   title: string;
@@ -165,6 +188,7 @@ export interface SubjectListItem {
     hasAccess: boolean;
     accessRequested: boolean;
   };
+  progress: (Rollup & { lastOpenedAt: string | null }) | null;
 }
 
 export interface OutlineNode {
@@ -423,6 +447,7 @@ export interface DashboardData {
   subjectProgress: { id: string; title: string; color: string | null; due: number; completed: number; rate: number }[];
   recentActivity: { id: string; title: string; subject: string; completedAt: string; duration: number }[];
   weakAreas: { mastery: number; title: string; subjectId: string }[];
+  reading: (Rollup & { id: string; title: string; color: string | null; lastOpenedAt: string | null })[];
 }
 
 export interface NotificationItem {
@@ -580,6 +605,19 @@ export const subjectsApi = {
   },
   deleteAttachment: (attachmentId: string) =>
     api(`/api/attachments/${attachmentId}`, { method: "DELETE" }),
+};
+
+export const progressApi = {
+  get: (subjectId: string) => api<SubjectProgress | null>(`/api/progress/subjects/${subjectId}`),
+  heartbeat: (subjectId: string, nodeId: string | null, seconds: number, opened = false) =>
+    api(`/api/progress/subjects/${subjectId}/heartbeat`, { method: "POST", body: { nodeId, seconds, opened } }),
+  complete: (subjectId: string, nodeId: string | null) =>
+    api<SubjectProgress>(`/api/progress/subjects/${subjectId}/complete`, { method: "POST", body: { nodeId } }),
+  uncomplete: (subjectId: string, nodeId: string | null) =>
+    api<SubjectProgress>(`/api/progress/subjects/${subjectId}/uncomplete`, { method: "POST", body: { nodeId } }),
+  reset: (subjectId: string, nodeId: string | null) =>
+    api<SubjectProgress>(`/api/progress/subjects/${subjectId}/reset`, { method: "POST", body: { nodeId } }),
+  forUser: (userId: string) => api<Record<string, Rollup>>(`/api/progress/users/${userId}`),
 };
 
 export const categoriesApi = {

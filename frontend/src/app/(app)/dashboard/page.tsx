@@ -3,12 +3,13 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Flame, Target, Star, AlertTriangle, CalendarDays, TrendingUp, Clock, CheckCircle2, Library } from "lucide-react";
+import { Flame, Target, Star, AlertTriangle, CalendarDays, TrendingUp, Clock, CheckCircle2, Library, BookOpen } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { EmptyState, Spinner } from "@/components/ui/field";
 import { OccurrenceRow, UpcomingList } from "@/components/tasks/agenda";
+import { ProgressBar } from "@/components/progress/progress";
 import { dashboardApi, type DashboardData } from "@/lib/api";
 import { formatDuration, getXpForLevel, timeAgo } from "@/lib/utils";
 
@@ -85,7 +86,24 @@ export default function DashboardPage() {
 
         <div className="space-y-6">
           <Card>
-            <CardHeader><CardTitle className="flex items-center gap-2 text-base"><TrendingUp className="h-4 w-4 text-emerald-400" /> Consistency by subject</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="flex items-center gap-2 text-base"><BookOpen className="h-4 w-4 text-indigo-400" /> Continue reading</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              {d.reading.length === 0 ? (
+                <p className="py-2 text-center text-sm text-gray-500">
+                  Open a subject in the <Link href="/library" className="text-indigo-400 hover:underline">Library</Link> to start tracking what you read.
+                </p>
+              ) : (
+                d.reading.map((r) => (
+                  <Link key={r.id} href={`/subjects/${r.id}`} className="block rounded-lg p-1 hover:bg-gray-800/40">
+                    <p className="mb-1 truncate text-sm text-gray-200">{r.title}</p>
+                    <ProgressBar p={r} />
+                  </Link>
+                ))
+              )}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle className="flex items-center gap-2 text-base"><TrendingUp className="h-4 w-4 text-emerald-400" /> Practice consistency</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               {d.subjectProgress.length === 0 ? (
                 <p className="py-2 text-center text-sm text-gray-500">Complete practice to see progress.</p>
