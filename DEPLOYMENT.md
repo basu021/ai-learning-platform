@@ -152,6 +152,19 @@ not by replacing it.**
 
 `deploy/db.sh status local|prod` lists every migration and whether it has run.
 
+**When the remote connection isn't available** (Remote MySQL not allowed for
+this server, or the deployer may not touch production), the owner runs it in
+hPanel → Databases → **phpMyAdmin** → the `u807244070_learnbackend` database →
+**SQL** tab. Paste the migration file and these two lines, then click **Go**.
+Download a backup first with the **Export** tab.
+
+```sql
+CREATE TABLE IF NOT EXISTS deploy_migrations (name VARCHAR(191) PRIMARY KEY, applied_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3));
+INSERT INTO deploy_migrations (name) VALUES ('<migration file name>.sql');
+```
+
+Do this **before** uploading the backend that needs it.
+
 ### Full replace (rare; only when the owner asks)
 
 `deploy/db.sh replace <dump.sql>` backs up Hostinger and drops **every** table,
