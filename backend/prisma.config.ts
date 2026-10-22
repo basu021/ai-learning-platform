@@ -3,12 +3,22 @@
 import "dotenv/config";
 import { defineConfig } from "prisma/config";
 
+/**
+ * The Prisma CLI (migrate) needs a URL. Build it from the DB_* variables when
+ * DATABASE_URL isn't set, encoding the password so characters like @ # / : work.
+ */
+function databaseUrl() {
+  if (process.env["DATABASE_URL"]) return process.env["DATABASE_URL"];
+  const e = (v: string | undefined, d: string) => encodeURIComponent(v || d);
+  return `mysql://${e(process.env["DB_USER"], "root")}:${e(process.env["DB_PASSWORD"], "password")}@${process.env["DB_HOST"] || "localhost"}:${process.env["DB_PORT"] || "3306"}/${e(process.env["DB_NAME"], "ai_learning_platform")}`;
+}
+
 export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: {
     path: "prisma/migrations",
   },
   datasource: {
-    url: process.env["DATABASE_URL"],
+    url: databaseUrl(),
   },
 });

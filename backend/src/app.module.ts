@@ -11,6 +11,8 @@ import { GamificationModule } from './gamification/gamification.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { AdminModule } from './admin/admin.module';
 
+import { HealthController } from './health.controller';
+
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
@@ -25,5 +27,6 @@ import { AdminModule } from './admin/admin.module';
     DashboardModule,
     AdminModule,
   ],
+  controllers: [HealthController],
 })
 export class AppModule {}
