@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useRouteId } from "@/lib/route-id";
+
 import { ArrowLeft, ListPlus, Library, KeyRound, Shield, UserX, UserCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,7 +33,7 @@ function ReadPct({ p }: { p?: Rollup }) {
 }
 
 function Detail() {
-  const { id } = useParams<{ id: string }>();
+  const id = useRouteId("/admin/users");
   const { me } = useSession();
   const toast = useToast();
   const [user, setUser] = useState<AdminUserDetail | null>(null);

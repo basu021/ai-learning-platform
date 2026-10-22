@@ -2,7 +2,8 @@
 
 import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useRouteId } from "@/lib/route-id";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   Pencil,
@@ -143,7 +144,7 @@ function ReadBar({
 }
 
 function SubjectView() {
-  const { id } = useParams<{ id: string }>();
+  const id = useRouteId("/subjects");
   const router = useRouter();
   const params = useSearchParams();
   const toast = useToast();

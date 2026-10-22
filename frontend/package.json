@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "postbuild": "node scripts/write-htaccess.mjs",
+    "build:hostinger": "npm run build",
     "start": "next start",
     "lint": "next lint"
   },

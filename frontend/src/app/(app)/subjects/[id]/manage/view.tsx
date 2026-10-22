@@ -2,7 +2,8 @@
 
 import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useRouteId } from "@/lib/route-id";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   ArrowUp,
@@ -604,7 +605,7 @@ function HistoryTab({ subject, reload, trash }: { subject: SubjectDetail; reload
 // -------------------------------------------------------------------- page
 
 function ManageView() {
-  const { id } = useParams<{ id: string }>();
+  const id = useRouteId("/subjects");
   const params = useSearchParams();
   const router = useRouter();
   const [subject, setSubject] = useState<SubjectDetail | null>(null);

@@ -2,7 +2,8 @@
 
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useRouteId } from "@/lib/route-id";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +16,7 @@ import { subjectsApi, type Crumb, type NodeType, type SubjectDetail } from "@/li
 import { NODE_LABEL } from "@/lib/utils";
 
 function EditView() {
-  const { id } = useParams<{ id: string }>();
+  const id = useRouteId("/subjects");
   const params = useSearchParams();
   const router = useRouter();
   const toast = useToast();

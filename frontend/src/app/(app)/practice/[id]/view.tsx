@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useRouteId } from "@/lib/route-id";
+import { useRouter } from "next/navigation";
 import { ArrowLeft, BookOpen, CheckCircle2, Clock, Play, SkipForward, Square, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -52,7 +53,7 @@ function FeedbackCard({ f }: { f: FeedbackData }) {
 }
 
 export default function PracticePage() {
-  const { id } = useParams<{ id: string }>();
+  const id = useRouteId("/practice");
   const router = useRouter();
   const toast = useToast();
   const { me, refresh } = useSession();
