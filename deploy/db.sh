@@ -15,7 +15,13 @@ set -euo pipefail
 
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(dirname "$HERE")
-[ -f "$HERE/.env" ] && set -a && . "$HERE/.env" && set +a
+# deploy/.env fills in settings; values already in the environment win.
+if [ -f "$HERE/.env" ]; then
+  while IFS='=' read -r k v; do
+    [[ $k =~ ^[A-Z_]+$ ]] || continue
+    [ -n "${!k:-}" ] || export "$k=$v"
+  done < "$HERE/.env"
+fi
 CONTAINER=${LOCAL_MYSQL_CONTAINER:-skillforge-mysql}
 BACKUP_DIR=${BACKUP_DIR:-$HOME/skillforge-backups}
 MIGRATIONS=$ROOT/php-backend/database/migrations
@@ -29,7 +35,7 @@ need_prod() {
   if [ -z "${HOSTINGER_DB_PASSWORD:-}" ]; then read -rsp "Hostinger DB password: " HOSTINGER_DB_PASSWORD; echo; fi
 }
 prod_sql()  { docker exec -i -e MYSQL_PWD="$HOSTINGER_DB_PASSWORD" "$CONTAINER" mysql --connect-timeout=15 -h "$HOSTINGER_DB_HOST" -u "$HOSTINGER_DB_USER" --default-character-set=utf8mb4 "$HOSTINGER_DB_NAME" "$@"; }
-prod_dump() { docker exec -i -e MYSQL_PWD="$HOSTINGER_DB_PASSWORD" "$CONTAINER" mysqldump --connect-timeout=15 -h "$HOSTINGER_DB_HOST" -u "$HOSTINGER_DB_USER" --default-character-set=utf8mb4 --single-transaction --no-tablespaces --column-statistics=0 --skip-comments "$HOSTINGER_DB_NAME"; }
+prod_dump() { docker exec -i -e MYSQL_PWD="$HOSTINGER_DB_PASSWORD" "$CONTAINER" mysqldump -h "$HOSTINGER_DB_HOST" -u "$HOSTINGER_DB_USER" --default-character-set=utf8mb4 --single-transaction --no-tablespaces --column-statistics=0 --skip-comments "$HOSTINGER_DB_NAME"; }
 
 target_sql() { if [ "$1" = prod ]; then shift; prod_sql "$@"; else shift; local_sql "$@"; fi; }
 
