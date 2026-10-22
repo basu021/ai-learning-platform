@@ -1,5 +1,7 @@
 # SkillForge - AI-Powered Technical Training Platform
 
+> **Deploying:** see [DEPLOYMENT.md](DEPLOYMENT.md). Production runs `frontend/` and `php-backend/` from separate repos on Hostinger.
+
 A modern, gamified learning and practice management platform for technical skill training. Built for system administrators, DBAs, DevOps engineers, and infrastructure professionals.
 
 ## Features

@@ -1,6 +1,7 @@
 # SkillForge API (PHP)
 
-A PHP port of the NestJS API in `../backend`, for hosting that only runs PHP.
+The SkillForge API in plain PHP (a port of the NestJS API), for hosting that
+only runs PHP.
 Same routes, request validation, JSON responses and database tables, so the
 Next.js frontend works with either. No Composer packages are needed.
 
@@ -10,8 +11,8 @@ MariaDB 10.6+; Apache or LiteSpeed with `.htaccess` (mod_rewrite).
 ## Deploy (Hostinger or any PHP host)
 
 1. Create the database tables: import a dump of the current data, or
-   `../db/skillforge-dump.sql`. The schema is the Prisma schema in
-   `../backend/prisma`; this API does not run migrations.
+   `database/schema.sql` for an empty database. This API does not run
+   migrations.
 2. Upload the contents of this folder to the domain's document root
    (e.g. `public_html`), so `index.php` and `.htaccess` sit at the top.
 3. Copy `.env.example` to `.env` and fill it in.
