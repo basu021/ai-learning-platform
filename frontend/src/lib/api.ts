@@ -439,6 +439,56 @@ export interface TaskInput {
   schedule: ScheduleInput;
 }
 
+export interface RelativeScheduleInput {
+  frequency: Frequency;
+  weekdays?: number[];
+  monthDay?: number;
+  intervalDays?: number;
+  /** 0 = start on the completion day. */
+  startAfterDays: number;
+  /** Repeating tasks only; empty = no end. */
+  durationDays?: number | null;
+}
+
+export interface TaskTemplateInput {
+  subjectId: string;
+  nodeId?: string | null;
+  /** Empty = when the whole subject is complete. */
+  triggerNodeId?: string | null;
+  title: string;
+  instructions?: string;
+  difficulty?: string;
+  estimatedMins?: number;
+  xpReward?: number;
+  schedule: RelativeScheduleInput;
+}
+
+/** An unassigned task given to each learner once they complete its trigger. */
+export interface TaskTemplate {
+  id: string;
+  subjectId: string;
+  nodeId: string | null;
+  triggerNodeId: string | null;
+  title: string;
+  instructions: string | null;
+  difficulty: string;
+  estimatedMins: number | null;
+  xpReward: number;
+  frequency: Frequency;
+  weekdays: number[];
+  monthDay: number | null;
+  intervalDays: number | null;
+  startAfterDays: number;
+  durationDays: number | null;
+  active: boolean;
+  subject: { id: string; title: string; color: string | null };
+  createdBy: UserSummary;
+  scheduleLabel: string;
+  breadcrumb: Crumb[];
+  trigger: Crumb[];
+  assignedCount: number;
+}
+
 export interface DashboardData {
   user: { name: string; totalXp: number; level: number; role: Role } | null;
   streak: { currentCount: number; longestCount: number } | null;
@@ -644,6 +694,14 @@ export const tasksApi = {
   skip: (occurrenceId: string) => api(`/api/tasks/occurrences/${occurrenceId}/skip`, { method: "POST" }),
   finishSession: (sessionId: string) =>
     api<SessionData>(`/api/tasks/sessions/${sessionId}/finish`, { method: "POST" }),
+};
+
+export const taskTemplatesApi = {
+  list: (subjectId?: string) => api<TaskTemplate[]>(`/api/task-templates${qs({ subjectId })}`),
+  create: (data: TaskTemplateInput) => api<TaskTemplate>("/api/task-templates", { method: "POST", body: data }),
+  update: (id: string, data: Partial<Omit<TaskTemplateInput, "subjectId">> & { active?: boolean }) =>
+    api<TaskTemplate>(`/api/task-templates/${id}`, { method: "PUT", body: data }),
+  remove: (id: string) => api(`/api/task-templates/${id}`, { method: "DELETE" }),
 };
 
 export const feedbackApi = {

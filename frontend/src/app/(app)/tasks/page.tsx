@@ -1,18 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CalendarDays, ListTodo, Plus, AlertTriangle, CheckCircle2, Pencil, Trash2, Pause, Play as PlayIcon, History } from "lucide-react";
+import { CalendarDays, ListTodo, Plus, AlertTriangle, CheckCircle2, Pencil, Trash2, Pause, Play as PlayIcon, History, Repeat, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmptyState, Spinner, Tabs } from "@/components/ui/field";
 import { useToast } from "@/components/ui/toast";
 import { TaskFormModal } from "@/components/tasks/task-form";
 import { OccurrenceRow, TaskMeta, UpcomingList } from "@/components/tasks/agenda";
 import { Breadcrumb } from "@/components/content/breadcrumb";
-import { tasksApi, type Agenda, type OccurrenceItem, type TaskDetail } from "@/lib/api";
+import { taskTemplatesApi, tasksApi, type Agenda, type OccurrenceItem, type TaskDetail, type TaskTemplate } from "@/lib/api";
 import { useSession } from "@/lib/auth";
 import { cn, formatDay } from "@/lib/utils";
 
-type Tab = "agenda" | "upcoming" | "mine" | "assigned" | "history";
+type Tab = "agenda" | "upcoming" | "mine" | "assigned" | "auto" | "history";
 
 function TaskDefinitions({ scope, onEdit, refreshKey }: { scope: "mine" | "assigned"; onEdit: (t: TaskDetail) => void; refreshKey: number }) {
   const toast = useToast();
@@ -84,6 +84,78 @@ function TaskDefinitions({ scope, onEdit, refreshKey }: { scope: "mine" | "assig
   );
 }
 
+/** Admin: tasks handed out automatically when a learner completes a chapter, topic or subject. */
+function TemplateList({ onEdit, refreshKey }: { onEdit: (t: TaskTemplate) => void; refreshKey: number }) {
+  const toast = useToast();
+  const [items, setItems] = useState<TaskTemplate[] | null>(null);
+  const load = useCallback(() => {
+    taskTemplatesApi.list().then(setItems).catch(() => setItems([]));
+  }, []);
+  useEffect(load, [load, refreshKey]);
+
+  if (!items) return <Spinner />;
+  if (!items.length) {
+    return (
+      <EmptyState icon={Zap} title="No auto-assign tasks">
+        Use New task, then choose “On completion” to give a task to every learner who finishes a chapter.
+      </EmptyState>
+    );
+  }
+
+  const toggle = async (t: TaskTemplate) => {
+    try {
+      await taskTemplatesApi.update(t.id, { active: !t.active });
+      load();
+    } catch (e) {
+      toast.error(e);
+    }
+  };
+  const remove = async (t: TaskTemplate) => {
+    if (!confirm(`Delete "${t.title}"? Learners who already got it keep their copy.`)) return;
+    try {
+      await taskTemplatesApi.remove(t.id);
+      load();
+    } catch (e) {
+      toast.error(e);
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      {items.map((t) => (
+        <div key={t.id} className={cn("flex items-center gap-3 rounded-lg border border-gray-800 bg-gray-900/40 p-3", !t.active && "opacity-60")}>
+          <span className="h-10 w-1 shrink-0 rounded-full" style={{ background: t.subject.color || "#6366f1" }} />
+          <div className="min-w-0 flex-1 space-y-1">
+            <p className="truncate text-sm font-medium text-gray-100">
+              {t.title}
+              {!t.active && <span className="ml-2 text-xs text-gray-500">(paused)</span>}
+            </p>
+            <Breadcrumb items={t.breadcrumb} />
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-500">
+              <span className="flex items-center gap-1 text-amber-300">
+                <Zap className="h-3 w-3" /> when {t.trigger[t.trigger.length - 1].title} is complete
+              </span>
+              <span className="flex items-center gap-1"><Repeat className="h-3 w-3" /> {t.scheduleLabel}</span>
+              <span>{t.difficulty}</span>
+              <span>{t.xpReward} XP</span>
+            </div>
+          </div>
+          <div className="hidden shrink-0 text-right text-[11px] text-gray-500 md:block">
+            <p>given to {t.assignedCount}</p>
+          </div>
+          <div className="flex shrink-0 gap-1">
+            <Button size="sm" variant="ghost" onClick={() => toggle(t)} title={t.active ? "Pause" : "Resume"}>
+              {t.active ? <Pause className="h-3.5 w-3.5" /> : <PlayIcon className="h-3.5 w-3.5" />}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => onEdit(t)} title="Edit"><Pencil className="h-3.5 w-3.5" /></Button>
+            <Button size="sm" variant="ghost" onClick={() => remove(t)} title="Delete"><Trash2 className="h-3.5 w-3.5 text-red-400" /></Button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function HistoryList() {
   const [items, setItems] = useState<(OccurrenceItem & { confidence: number | null })[] | null>(null);
   useEffect(() => {
@@ -110,6 +182,7 @@ export default function TasksPage() {
   const [agenda, setAgenda] = useState<Agenda | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<TaskDetail | null>(null);
+  const [editingTemplate, setEditingTemplate] = useState<TaskTemplate | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
   const loadAgenda = useCallback(() => {
@@ -129,7 +202,7 @@ export default function TasksPage() {
           </h1>
           <p className="mt-1 text-sm text-gray-400">Your scheduled practice, by subject, chapter, topic or subtopic.</p>
         </div>
-        <Button onClick={() => { setEditing(null); setFormOpen(true); }}>
+        <Button onClick={() => { setEditing(null); setEditingTemplate(null); setFormOpen(true); }}>
           <Plus className="mr-1 h-4 w-4" /> New task
         </Button>
       </div>
@@ -141,7 +214,12 @@ export default function TasksPage() {
           { value: "agenda", label: "Today", count: (agenda?.overdue.length ?? 0) + todayOpen },
           { value: "upcoming", label: "Upcoming" },
           { value: "mine", label: "My tasks" },
-          ...(isAdmin ? [{ value: "assigned" as Tab, label: "Assigned by me" }] : []),
+          ...(isAdmin
+            ? [
+                { value: "assigned" as Tab, label: "Assigned by me" },
+                { value: "auto" as Tab, label: "Auto-assign" },
+              ]
+            : []),
           { value: "history", label: "History" },
         ]}
       />
@@ -180,11 +258,14 @@ export default function TasksPage() {
       {tab === "upcoming" &&
         (!agenda ? <Spinner /> : agenda.upcoming.length === 0 ? <EmptyState icon={CalendarDays} title="Nothing in the next 14 days" /> : <UpcomingList items={agenda.upcoming} />)}
       {(tab === "mine" || tab === "assigned") && (
-        <TaskDefinitions scope={tab} refreshKey={refreshKey} onEdit={(t) => { setEditing(t); setFormOpen(true); }} />
+        <TaskDefinitions scope={tab} refreshKey={refreshKey} onEdit={(t) => { setEditing(t); setEditingTemplate(null); setFormOpen(true); }} />
+      )}
+      {tab === "auto" && (
+        <TemplateList refreshKey={refreshKey} onEdit={(t) => { setEditingTemplate(t); setEditing(null); setFormOpen(true); }} />
       )}
       {tab === "history" && <HistoryList />}
 
-      <TaskFormModal open={formOpen} onClose={() => setFormOpen(false)} onSaved={saved} task={editing} />
+      <TaskFormModal open={formOpen} onClose={() => setFormOpen(false)} onSaved={saved} task={editing} template={editingTemplate} />
     </div>
   );
 }

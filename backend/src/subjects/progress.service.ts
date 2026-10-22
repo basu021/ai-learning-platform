@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import type { ReadProgress, StudyEventType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AuthUser } from '../common/decorators/current-user.decorator';
@@ -40,6 +40,13 @@ interface TreeNode {
 }
 
 const MAX_HEARTBEAT_SEC = 120;
+
+/** Runs after a user marks something read, with their fresh progress for the subject. */
+export type CompletionListener = (
+  userId: string,
+  subjectId: string,
+  progress: SubjectProgress,
+) => Promise<void>;
 
 function itemState(p: ReadProgress | undefined, updatedAt: Date): ItemState {
   if (p?.completedAt) return p.completedAt >= updatedAt ? 'done' : 'outdated';
@@ -138,11 +145,19 @@ export function computeProgress(
 
 @Injectable()
 export class ProgressService {
+  private readonly logger = new Logger(ProgressService.name);
+  private listeners: CompletionListener[] = [];
+
   constructor(
     private prisma: PrismaService,
     private access: AccessService,
     private content: ContentService,
   ) {}
+
+  /** Lets other modules (auto-assigned tasks) react to completions without a circular import. */
+  onCompletion(listener: CompletionListener) {
+    this.listeners.push(listener);
+  }
 
   private async loadTrees(subjectIds: string[]) {
     if (!subjectIds.length) return { subjects: [], nodes: [] };
@@ -356,7 +371,16 @@ export class ProgressService {
       nodeId,
       complete ? 'COMPLETE' : 'UNCOMPLETE',
     );
-    return this.forUser(user.id, subjectId);
+    const progress = await this.forUser(user.id, subjectId);
+    if (complete) {
+      for (const listener of this.listeners) {
+        // A failing listener must not undo or block the read mark.
+        await listener(user.id, subjectId, progress).catch((e: Error) =>
+          this.logger.error(`Completion listener failed: ${e.message}`),
+        );
+      }
+    }
+    return progress;
   }
 
   /** Start over: clears read marks for the item and everything under it (whole subject when nodeId is null). */

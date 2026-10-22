@@ -14,9 +14,12 @@ import {
   tasksApi,
   type Frequency,
   type OutlineNode,
+  taskTemplatesApi,
+  type RelativeScheduleInput,
   type ScheduleInput,
   type SubjectListItem,
   type TaskDetail,
+  type TaskTemplate,
   type UserSummary,
 } from "@/lib/api";
 import { useSession } from "@/lib/auth";
@@ -31,17 +34,23 @@ const FREQS: { value: Frequency; label: string }[] = [
   { value: "CUSTOM", label: "Every N days" },
 ];
 
-export function ScheduleFields({
+type RepeatValue = Pick<ScheduleInput, "frequency" | "weekdays" | "monthDay" | "intervalDays">;
+
+/** Frequency buttons plus the weekday / day-of-month / every-N-days settings. */
+function RepeatFields<T extends RepeatValue>({
   value,
   onChange,
+  refDate,
 }: {
-  value: ScheduleInput;
-  onChange: (s: ScheduleInput) => void;
+  value: T;
+  onChange: (s: T) => void;
+  /** Used to pick a sensible weekday / day of month when switching frequency. */
+  refDate: string;
 }) {
-  const set = (patch: Partial<ScheduleInput>) => onChange({ ...value, ...patch });
+  const set = (patch: Partial<RepeatValue>) => onChange({ ...value, ...patch });
   const weekdays = value.weekdays ?? [];
   return (
-    <div className="space-y-3 rounded-lg border border-gray-800 bg-gray-950/40 p-3">
+    <>
       <div className="flex flex-wrap gap-1">
         {FREQS.map((f) => (
           <button
@@ -50,9 +59,9 @@ export function ScheduleFields({
             onClick={() =>
               set({
                 frequency: f.value,
-                weekdays: f.value === "WEEKLY" && !weekdays.length ? [new Date(`${value.startDate}T00:00:00`).getDay()] : value.weekdays,
+                weekdays: f.value === "WEEKLY" && !weekdays.length ? [new Date(`${refDate}T00:00:00`).getDay()] : value.weekdays,
                 intervalDays: f.value === "CUSTOM" ? value.intervalDays ?? 2 : value.intervalDays,
-                monthDay: f.value === "MONTHLY" ? value.monthDay ?? Number(value.startDate.slice(8, 10)) : value.monthDay,
+                monthDay: f.value === "MONTHLY" ? value.monthDay ?? Number(refDate.slice(8, 10)) : value.monthDay,
               })
             }
             className={cn(
@@ -103,7 +112,21 @@ export function ScheduleFields({
           </div>
         </Field>
       )}
+    </>
+  );
+}
 
+export function ScheduleFields({
+  value,
+  onChange,
+}: {
+  value: ScheduleInput;
+  onChange: (s: ScheduleInput) => void;
+}) {
+  const set = (patch: Partial<ScheduleInput>) => onChange({ ...value, ...patch });
+  return (
+    <div className="space-y-3 rounded-lg border border-gray-800 bg-gray-950/40 p-3">
+      <RepeatFields value={value} onChange={onChange} refDate={value.startDate} />
       <div className="grid grid-cols-2 gap-3">
         <Field label={value.frequency === "ONCE" ? "Date" : "Starts"}>
           <Input type="date" value={value.startDate} onChange={(e) => set({ startDate: e.target.value })} required />
@@ -111,6 +134,38 @@ export function ScheduleFields({
         {value.frequency !== "ONCE" && (
           <Field label="Ends (optional)">
             <Input type="date" value={value.endDate ?? ""} min={value.startDate} onChange={(e) => set({ endDate: e.target.value || null })} />
+          </Field>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Schedule for an auto-assigned task: counted from the day the learner completes the trigger. */
+function RelativeScheduleFields({
+  value,
+  onChange,
+}: {
+  value: RelativeScheduleInput;
+  onChange: (s: RelativeScheduleInput) => void;
+}) {
+  const set = (patch: Partial<RelativeScheduleInput>) => onChange({ ...value, ...patch });
+  return (
+    <div className="space-y-3 rounded-lg border border-gray-800 bg-gray-950/40 p-3">
+      <RepeatFields value={value} onChange={onChange} refDate={localDate()} />
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Start" hint="0 = the day they complete it">
+          <div className="flex items-center gap-2">
+            <Input type="number" min={0} max={365} value={value.startAfterDays} onChange={(e) => set({ startAfterDays: Math.max(0, Number(e.target.value) || 0) })} className="w-20" />
+            <span className="text-xs text-gray-400">days after</span>
+          </div>
+        </Field>
+        {value.frequency !== "ONCE" && (
+          <Field label="Run for (optional)" hint="Empty = no end">
+            <div className="flex items-center gap-2">
+              <Input type="number" min={1} max={3650} value={value.durationDays ?? ""} onChange={(e) => set({ durationDays: e.target.value ? Number(e.target.value) : null })} className="w-20" />
+              <span className="text-xs text-gray-400">days</span>
+            </div>
           </Field>
         )}
       </div>
@@ -130,6 +185,7 @@ export function TaskFormModal({
   onSaved,
   defaults,
   task,
+  template,
 }: {
   open: boolean;
   onClose: () => void;
@@ -137,10 +193,12 @@ export function TaskFormModal({
   defaults?: TaskFormDefaults;
   /** Edit mode when provided. */
   task?: TaskDetail | null;
+  /** Edit an auto-assign task (admin). */
+  template?: TaskTemplate | null;
 }) {
   const { me, isAdmin } = useSession();
   const toast = useToast();
-  const editing = !!task;
+  const editing = !!task || !!template;
   const [subjects, setSubjects] = useState<SubjectListItem[]>([]);
   const [outline, setOutline] = useState<OutlineNode[]>([]);
   const [subjectId, setSubjectId] = useState("");
@@ -152,6 +210,11 @@ export function TaskFormModal({
   const [xpReward, setXpReward] = useState(10);
   const [schedule, setSchedule] = useState<ScheduleInput>({ frequency: "DAILY", startDate: localDate() });
   const [assignees, setAssignees] = useState<UserSummary[]>([]);
+  // Auto-assign: unassigned until a learner completes the trigger.
+  const [auto, setAuto] = useState(false);
+  const [triggerId, setTriggerId] = useState("");
+  const [triggerTouched, setTriggerTouched] = useState(false);
+  const [rel, setRel] = useState<RelativeScheduleInput>({ frequency: "ONCE", startAfterDays: 0 });
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -159,7 +222,26 @@ export function TaskFormModal({
   useEffect(() => {
     if (!open) return;
     setError("");
-    if (task) {
+    setAuto(!!template);
+    setTriggerTouched(!!template);
+    if (template) {
+      setSubjectId(template.subjectId);
+      setNodeId(template.nodeId ?? "");
+      setTriggerId(template.triggerNodeId ?? "");
+      setTitle(template.title);
+      setInstructions(template.instructions ?? "");
+      setDifficulty(template.difficulty);
+      setEstimatedMins(template.estimatedMins ?? "");
+      setXpReward(template.xpReward);
+      setRel({
+        frequency: template.frequency,
+        weekdays: template.weekdays,
+        monthDay: template.monthDay ?? undefined,
+        intervalDays: template.intervalDays ?? undefined,
+        startAfterDays: template.startAfterDays,
+        durationDays: template.durationDays,
+      });
+    } else if (task) {
       setSubjectId(task.subjectId);
       setNodeId(task.nodeId ?? "");
       setTitle(task.title);
@@ -185,10 +267,12 @@ export function TaskFormModal({
       setXpReward(10);
       setSchedule({ frequency: "DAILY", startDate: localDate() });
       setAssignees(defaults?.assignees ?? []);
+      setTriggerId("");
+      setRel({ frequency: "ONCE", startAfterDays: 0 });
     }
     // Only reset when the modal opens or switches task, not on every parent render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, task?.id]);
+  }, [open, task?.id, template?.id]);
 
   useEffect(() => {
     if (!open || editing) return;
@@ -207,18 +291,32 @@ export function TaskFormModal({
   }, [open, subjectId]);
 
   const flat = useMemo(() => flattenOutline(outline), [outline]);
+
+  // Default trigger: the chapter that contains what is being practised.
+  useEffect(() => {
+    if (!auto || triggerTouched) return;
+    let chapter = "";
+    for (const { node, depth } of flat) {
+      if (depth === 0) chapter = node.id;
+      if (node.id === nodeId) break;
+    }
+    setTriggerId(nodeId ? chapter : "");
+  }, [auto, triggerTouched, nodeId, flat]);
   const forOthers = assignees.some((a) => a.id !== me?.id);
 
   const submit = async () => {
     setSaving(true);
     setError("");
-    const body = {
+    const common = {
       nodeId: nodeId || null,
       title,
       instructions,
       difficulty,
       estimatedMins: estimatedMins === "" ? undefined : estimatedMins,
       xpReward,
+    };
+    const body = {
+      ...common,
       // Send only the fields that belong to the chosen frequency.
       schedule: {
         frequency: schedule.frequency,
@@ -229,8 +327,25 @@ export function TaskFormModal({
         intervalDays: schedule.frequency === "CUSTOM" ? schedule.intervalDays : undefined,
       },
     };
+    const relSchedule: RelativeScheduleInput = {
+      frequency: rel.frequency,
+      startAfterDays: rel.startAfterDays,
+      durationDays: rel.frequency === "ONCE" ? null : rel.durationDays ?? null,
+      weekdays: rel.frequency === "WEEKLY" ? rel.weekdays : undefined,
+      monthDay: rel.frequency === "MONTHLY" ? rel.monthDay : undefined,
+      intervalDays: rel.frequency === "CUSTOM" ? rel.intervalDays : undefined,
+    };
     try {
-      if (task) {
+      if (auto) {
+        const data = { ...common, triggerNodeId: triggerId || null, schedule: relSchedule };
+        if (template) {
+          await taskTemplatesApi.update(template.id, data);
+          toast.success("Auto-assign task updated");
+        } else {
+          await taskTemplatesApi.create({ ...data, subjectId });
+          toast.success("Saved. Learners get it when they complete the trigger");
+        }
+      } else if (task) {
         await tasksApi.update(task.id, body);
         toast.success("Task updated");
       } else {
@@ -255,13 +370,13 @@ export function TaskFormModal({
       open={open}
       onClose={onClose}
       size="xl"
-      title={editing ? "Edit task" : "New practice task"}
+      title={template ? "Edit auto-assign task" : editing ? "Edit task" : "New practice task"}
       description="Practise a whole subject or any chapter, topic or subtopic on a schedule."
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
           <Button onClick={submit} disabled={saving || !subjectId || title.trim().length < 2}>
-            {saving ? "Saving…" : editing ? "Save changes" : forOthers ? "Assign task" : "Create task"}
+            {saving ? "Saving…" : editing ? "Save changes" : auto ? "Save auto-assign task" : forOthers ? "Assign task" : "Create task"}
           </Button>
         </>
       }
@@ -329,10 +444,56 @@ export function TaskFormModal({
         </div>
 
         <div className="space-y-4">
-          <Field label="Schedule">
-            <ScheduleFields value={schedule} onChange={setSchedule} />
-          </Field>
           {isAdmin && !editing && (
+            <Field label="Who gets it">
+              <div className="grid grid-cols-2 gap-1 rounded-lg border border-gray-800 p-1">
+                {[
+                  { v: false, label: "Specific people" },
+                  { v: true, label: "On completion" },
+                ].map((o) => (
+                  <button
+                    key={o.label}
+                    type="button"
+                    onClick={() => setAuto(o.v)}
+                    className={cn(
+                      "rounded-md px-2 py-1.5 text-xs font-medium",
+                      auto === o.v ? "bg-indigo-500/20 text-indigo-200" : "text-gray-400 hover:text-gray-200",
+                    )}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+            </Field>
+          )}
+          {auto ? (
+            <>
+              <Field label="Assign when a learner completes" hint="Everything inside it must be marked read (green).">
+                <Select value={triggerId} onChange={(e) => { setTriggerId(e.target.value); setTriggerTouched(true); }} disabled={!subjectId}>
+                  <option value="">Whole subject</option>
+                  {flat.map(({ node, depth }) => (
+                    <option key={node.id} value={node.id}>
+                      {"  ".repeat(depth * 2)}
+                      {NODE_LABEL[node.type]}: {node.title}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="Schedule after completion">
+                <RelativeScheduleFields value={rel} onChange={setRel} />
+              </Field>
+              {template ? (
+                <Alert tone="info">Given to {template.assignedCount} learner{template.assignedCount === 1 ? "" : "s"} so far. Changes apply to learners who complete it from now on.</Alert>
+              ) : (
+                <Alert tone="info">Not assigned to anyone yet. Each learner gets their own copy once, the moment they complete the trigger.</Alert>
+              )}
+            </>
+          ) : (
+            <Field label="Schedule">
+              <ScheduleFields value={schedule} onChange={setSchedule} />
+            </Field>
+          )}
+          {isAdmin && !editing && !auto && (
             <Field label="Assign to" hint="Leave empty to schedule it for yourself. Assignees get view access to the subject automatically.">
               <UserPicker value={assignees} onChange={setAssignees} placeholder="Search username…" />
             </Field>

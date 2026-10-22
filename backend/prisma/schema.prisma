@@ -102,6 +102,7 @@ model User {
   attachments      Attachment[]
   createdTasks     Task[]             @relation("TaskCreator")
   assignedTasks    Task[]             @relation("TaskAssignee")
+  taskTemplates    TaskTemplate[]
   occurrences      TaskOccurrence[]
   taskSessions     TaskSession[]
   feedback         Feedback[]
@@ -153,6 +154,7 @@ model Subject {
   revisions      ContentRevision[]
   attachments    Attachment[]
   tasks          Task[]
+  taskTemplates  TaskTemplate[]
 
   @@index([ownerId])
   @@index([visibility, status])
@@ -184,6 +186,8 @@ model ContentNode {
   changes     ChangeRequest[]
   attachments Attachment[]
   tasks       Task[]
+  templates   TaskTemplate[] @relation("TemplateNode")
+  triggers    TaskTemplate[] @relation("TemplateTrigger")
 
   @@index([subjectId, parentId])
   @@map("content_nodes")
@@ -309,20 +313,59 @@ model Task {
   startDate     DateTime  @db.Date @map("start_date")
   endDate       DateTime? @db.Date @map("end_date")
   generatedThru DateTime? @db.Date @map("generated_thru")
+  /// Set when the task was created automatically from an auto-assign template.
+  templateId    String?   @map("template_id")
   active        Boolean   @default(true)
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
   deletedAt     DateTime? @map("deleted_at")
 
+  template    TaskTemplate?    @relation(fields: [templateId], references: [id], onDelete: SetNull)
   subject     Subject          @relation(fields: [subjectId], references: [id], onDelete: Cascade)
   node        ContentNode?     @relation(fields: [nodeId], references: [id], onDelete: SetNull)
   createdBy   User             @relation("TaskCreator", fields: [createdById], references: [id], onDelete: Cascade)
   assignee    User             @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: Cascade)
   occurrences TaskOccurrence[]
 
+  @@unique([templateId, assigneeId])
   @@index([assigneeId, active])
   @@index([subjectId])
   @@map("tasks")
+}
+
+// An unassigned task that is given to each learner once they complete the trigger
+// (a node and everything beneath it, or the whole subject). The schedule is relative
+// to the completion day.
+model TaskTemplate {
+  id             String    @id @default(uuid())
+  subjectId      String    @map("subject_id")
+  nodeId         String?   @map("node_id") // what is practised
+  triggerNodeId  String?   @map("trigger_node_id") // null = whole subject
+  createdById    String    @map("created_by_id")
+  title          String
+  instructions   String?   @db.LongText
+  difficulty     String    @default("beginner")
+  estimatedMins  Int?      @map("estimated_mins")
+  xpReward       Int       @default(10) @map("xp_reward")
+  frequency      Frequency @default(ONCE)
+  weekdays       String?
+  monthDay       Int?      @map("month_day")
+  intervalDays   Int?      @map("interval_days")
+  startAfterDays Int       @default(0) @map("start_after_days")
+  durationDays   Int?      @map("duration_days") // repeating tasks: stop after N days
+  active         Boolean   @default(true)
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  subject     Subject      @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  node        ContentNode? @relation("TemplateNode", fields: [nodeId], references: [id], onDelete: SetNull)
+  triggerNode ContentNode? @relation("TemplateTrigger", fields: [triggerNodeId], references: [id], onDelete: SetNull)
+  createdBy   User         @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  tasks       Task[]
+
+  @@index([subjectId, active])
+  @@map("task_templates")
 }
 
 model TaskOccurrence {
