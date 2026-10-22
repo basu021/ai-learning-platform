@@ -11,6 +11,7 @@ import Placeholder from "@tiptap/extension-placeholder";
 import TextAlign from "@tiptap/extension-text-align";
 import Highlight from "@tiptap/extension-highlight";
 import { common, createLowlight } from "lowlight";
+import { YouTubeLinks } from "@/components/editor/youtube";
 import {
   Bold,
   Italic,
@@ -63,6 +64,7 @@ function extensions(placeholder?: string) {
     TextAlign.configure({ types: ["heading", "paragraph"] }),
     Highlight,
     Placeholder.configure({ placeholder: placeholder ?? "Write here…" }),
+    YouTubeLinks,
   ];
 }
 
