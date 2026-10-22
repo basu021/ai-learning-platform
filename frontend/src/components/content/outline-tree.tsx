@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronRight, Lock, Plus, BookOpen, FileText, Hash, Sparkles } from "lucide-react";
 import type { NodeProgress, NodeType, OutlineNode } from "@/lib/api";
 import { ProgressTick } from "@/components/progress/progress";
@@ -12,8 +12,8 @@ const ICONS: Record<NodeType, React.ComponentType<{ className?: string }>> = {
   SUBTOPIC: Hash,
 };
 
+/** Accordion: only the selected node and its ancestors are expanded, so its children show and other branches close. */
 function collectOpen(nodes: OutlineNode[], selected: string | null): Set<string> {
-  // Expand the path to the selected node, and all chapters by default.
   const open = new Set<string>();
   const walk = (list: OutlineNode[], trail: string[]): boolean =>
     list.some((n) => {
@@ -25,7 +25,6 @@ function collectOpen(nodes: OutlineNode[], selected: string | null): Set<string>
       return walk(n.children, [...trail, n.id]);
     });
   walk(nodes, []);
-  nodes.forEach((n) => open.add(n.id));
   return open;
 }
 
@@ -47,6 +46,9 @@ export function OutlineTree({
   progress?: Record<string, NodeProgress>;
 }) {
   const [open, setOpen] = useState<Set<string>>(() => collectOpen(nodes, selectedId));
+  // Opening a page collapses the other branches; the chevrons still toggle freely in between.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => setOpen(collectOpen(nodes, selectedId)), [selectedId]);
   const toggle = (id: string) =>
     setOpen((prev) => {
       const next = new Set(prev);
