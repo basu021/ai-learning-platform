@@ -1,0 +1,21 @@
+# SkillForge API: every request goes to index.php, so source files, .env and
+# uploads are never served directly.
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    # Some CGI/LiteSpeed setups drop the Authorization header unless it is passed on.
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+    RewriteRule ^index\.php$ - [L]
+    RewriteRule ^ index.php [L,QSA]
+</IfModule>
+
+<FilesMatch "^\.|\.(sql|md|log|example)$">
+    Require all denied
+</FilesMatch>
+
+<IfModule mod_php.c>
+    php_value upload_max_filesize 26M
+    php_value post_max_size 27M
+</IfModule>

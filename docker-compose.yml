@@ -23,15 +23,15 @@ services:
     volumes:
       - redis_data:/data
 
+  # PHP API (php-backend/). The NestJS version is in backend/.
   backend:
     build:
-      context: ./backend
+      context: ./php-backend
       dockerfile: Dockerfile
     container_name: skillforge-backend
     ports:
       - "${BACKEND_HOST_PORT:-3001}:3001"
     environment:
-      DATABASE_URL: "mysql://root:password@mysql:3306/ai_learning_platform"
       DB_HOST: "mysql"
       DB_PORT: "3306"
       DB_USER: "root"
@@ -40,8 +40,6 @@ services:
       JWT_SECRET: "dev-secret-change-me-in-production"
       FRONTEND_URL: "http://${PUBLIC_HOST:-localhost}:${FRONTEND_HOST_PORT:-3000}"
       CORS_ORIGINS: "http://localhost:${FRONTEND_HOST_PORT:-3000},http://${PUBLIC_HOST:-localhost}:${FRONTEND_HOST_PORT:-3000}"
-      REDIS_URL: "redis://redis:6379"
-      PORT: "3001"
       UPLOAD_DIR: "/app/uploads"
       APP_TIMEZONE: "${APP_TIMEZONE:-Asia/Kolkata}"
       ADMIN_EMAIL: "${ADMIN_EMAIL:-}"
