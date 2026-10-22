@@ -177,6 +177,20 @@ Images in content carry a signature made with `ATTACHMENT_SECRET`. If the
 local and Hostinger secrets differ, images in the copied content break after a
 replace until they're re-signed with the Hostinger secret.
 
+### Copy production to local
+
+`deploy/db.sh pull` replaces the **local** database with a copy of Hostinger.
+It backs up both databases to `~/skillforge-backups/` first, and you type
+`PULL` to confirm (or pass `--yes`). Then run `docker compose up -d --build`
+for the latest app.
+
+- Logins become the production users and passwords.
+- Uploaded files aren't copied, only their database rows. A file uploaded on
+  Hostinger only exists there.
+- Images in content work locally only when local `ATTACHMENT_SECRET` (root
+  `.env`) equals the Hostinger one. With the same secret, content copied in
+  either direction keeps working images.
+
 ### Connection settings
 
 `deploy/db.sh` reads `deploy/.env` (git-ignored; template `deploy/.env.example`):

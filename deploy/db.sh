@@ -7,6 +7,7 @@
 #   deploy/db.sh backup                dump the Hostinger DB to $BACKUP_DIR
 #   deploy/db.sh dump-local            dump the local DB (schema + data) to $BACKUP_DIR
 #   deploy/db.sh replace DUMP.sql      back up, then replace ALL Hostinger tables with DUMP.sql
+#   deploy/db.sh pull [--yes]          copy the Hostinger DB into the local DB (local is backed up, then replaced)
 #
 # Hostinger connection settings come from deploy/.env (see deploy/.env.example).
 # The password is asked for, or taken from HOSTINGER_DB_PASSWORD.
@@ -103,5 +104,22 @@ case $cmd in
     prod_sql -e "SELECT (SELECT COUNT(*) FROM subjects) subjects, (SELECT COUNT(*) FROM content_nodes) nodes, (SELECT COUNT(*) FROM tasks) tasks, (SELECT COUNT(*) FROM users) users"
     echo "Replaced. If ATTACHMENT_SECRET differs between local and Hostinger, images in content need re-signing (DEPLOYMENT.md)."
     ;;
-  *) sed -n '2,13p' "$0"; exit 2 ;;
+  pull)
+    need_prod
+    if [ "${1:-}" != --yes ]; then
+      echo "This replaces ALL tables in the local database with a copy of $HOSTINGER_DB_NAME."
+      read -rp "Type PULL to continue: " ok; [ "$ok" = PULL ] || { echo "Cancelled."; exit 1; }
+    fi
+    mkdir -p "$BACKUP_DIR"; chmod 700 "$BACKUP_DIR"
+    lf=$BACKUP_DIR/local-$STAMP.sql; (umask 077; local_dump > "$lf"); echo "Backup of local DB: $lf"
+    backup
+    pf=$BACKUP_DIR/hostinger-$STAMP.sql
+    tables=$(local_sql -N -e "SELECT GROUP_CONCAT(CONCAT('\`',table_name,'\`')) FROM information_schema.tables WHERE table_schema=DATABASE()")
+    if [ -n "$tables" ] && [ "$tables" != NULL ]; then local_sql -e "SET FOREIGN_KEY_CHECKS=0; DROP TABLE $tables; SET FOREIGN_KEY_CHECKS=1;"; fi
+    # MariaDB's default collation is unknown to MySQL 8.
+    sed 's/utf8mb4_uca1400_ai_ci/utf8mb4_unicode_ci/g' "$pf" | local_sql
+    local_sql -t -e "SELECT (SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE()) tables_now, (SELECT COUNT(*) FROM users) users, (SELECT COUNT(*) FROM subjects) subjects, (SELECT COUNT(*) FROM content_nodes) nodes, (SELECT COUNT(*) FROM tasks) tasks, (SELECT COUNT(*) FROM attachments) attachments"
+    echo "Local DB now matches Hostinger. Uploaded files are not copied; see DEPLOYMENT.md."
+    ;;
+  *) sed -n '2,14p' "$0"; exit 2 ;;
 esac

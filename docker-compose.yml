@@ -38,6 +38,9 @@ services:
       DB_PASSWORD: "password"
       DB_NAME: "ai_learning_platform"
       JWT_SECRET: "dev-secret-change-me-in-production"
+      # Signs image links in content. Use the Hostinger value (root .env) so
+      # content copied between local and Hostinger keeps working images.
+      ATTACHMENT_SECRET: "${ATTACHMENT_SECRET:-dev-secret-change-me-in-production}"
       FRONTEND_URL: "http://${PUBLIC_HOST:-localhost}:${FRONTEND_HOST_PORT:-3000}"
       CORS_ORIGINS: "http://localhost:${FRONTEND_HOST_PORT:-3000},http://${PUBLIC_HOST:-localhost}:${FRONTEND_HOST_PORT:-3000}"
       UPLOAD_DIR: "/app/uploads"
