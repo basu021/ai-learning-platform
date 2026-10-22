@@ -109,7 +109,66 @@ export type NodeType = "CHAPTER" | "TOPIC" | "SUBTOPIC";
 export type MemberRole = "VIEWER" | "EDITOR";
 export type RequestStatus = "PENDING" | "APPROVED" | "REJECTED";
 export type ChangeAction = "CREATE" | "UPDATE" | "DELETE";
-export type Frequency = "ONCE" | "DAILY" | "WEEKLY" | "MONTHLY" | "CUSTOM";
+export type Frequency = "ONCE" | "DAILY" | "WEEKLY" | "MONTHLY" | "CUSTOM" | "SPACED";
+
+export type SpacingPattern = "EXPONENTIAL" | "FIBONACCI" | "LINEAR" | "FIXED" | "CUSTOM";
+
+/** Spaced repetition settings. `days` are day numbers (1 = start date). */
+export interface SpacingInput {
+  pattern: SpacingPattern;
+  /** How many times it appears (not for CUSTOM). */
+  repetitions?: number;
+  /** Gap before the 2nd session, in days. */
+  firstGap?: number;
+  /** EXPONENTIAL: gap multiplier. LINEAR: days added to the gap each time. */
+  growth?: number;
+  /** Longest allowed gap, in days. */
+  maxGap?: number | null;
+  /** Total practice length: no session after this day. */
+  maxDays?: number | null;
+  /** CUSTOM only. */
+  days?: number[];
+}
+
+/** As stored: the settings plus the generated plan. */
+export interface Spacing extends SpacingInput {
+  repetitions: number;
+  days: number[];
+}
+
+export interface SpacingPreview {
+  spacing: Spacing;
+  label: string;
+  totalDays: number;
+  sessions: { n: number; day: number; gap: number; date: string | null }[];
+}
+
+/** Session number within a spaced plan, e.g. 3 of 7. */
+export interface SessionNo {
+  n: number;
+  of: number;
+}
+
+export type PlanStatus = "PENDING" | "OVERDUE" | "IN_PROGRESS" | "COMPLETED" | "SKIPPED";
+
+export interface PlanItem {
+  date: string;
+  session: SessionNo | null;
+  day: number | null;
+  gap: number | null;
+  status: PlanStatus;
+  occurrenceId: string | null;
+  completedAt: string | null;
+}
+
+export interface CalendarItem {
+  date: string;
+  /** Null for future practice that isn't due yet. */
+  occurrenceId: string | null;
+  status: PlanStatus;
+  session: SessionNo | null;
+  task: TaskLite;
+}
 export type OccurrenceStatus = "PENDING" | "IN_PROGRESS" | "COMPLETED" | "SKIPPED";
 
 export interface UserSummary {
@@ -353,12 +412,15 @@ export interface TaskDetail extends Omit<TaskLite, "breadcrumb"> {
   weekdays: number[];
   monthDay: number | null;
   intervalDays: number | null;
+  spacing: Spacing | null;
   startDate: string;
   endDate: string | null;
   active: boolean;
   assignee: UserSummary;
   canEdit: boolean;
   completedCount?: number;
+  /** Spaced tasks: how many sessions the plan has. */
+  totalSessions?: number | null;
   nextDue?: string | null;
   createdAt: string;
 }
@@ -368,6 +430,7 @@ export interface OccurrenceItem {
   status: OccurrenceStatus;
   dueDate: string;
   completedAt: string | null;
+  session?: SessionNo | null;
   task: TaskLite;
 }
 
@@ -375,7 +438,7 @@ export interface Agenda {
   today: string;
   todayItems: OccurrenceItem[];
   overdue: OccurrenceItem[];
-  upcoming: { dueDate: string; task: TaskLite }[];
+  upcoming: { dueDate: string; session?: SessionNo | null; task: TaskLite }[];
 }
 
 export interface SessionData {
@@ -402,6 +465,7 @@ export interface OccurrenceDetail {
   status: OccurrenceStatus;
   dueDate: string;
   completedAt: string | null;
+  session: SessionNo | null;
   task: TaskDetail;
   taskSessions: SessionData[];
   feedback: FeedbackData[];
@@ -423,6 +487,7 @@ export interface ScheduleInput {
   weekdays?: number[];
   monthDay?: number;
   intervalDays?: number;
+  spacing?: SpacingInput;
   startDate: string;
   endDate?: string | null;
 }
@@ -444,6 +509,7 @@ export interface RelativeScheduleInput {
   weekdays?: number[];
   monthDay?: number;
   intervalDays?: number;
+  spacing?: SpacingInput;
   /** 0 = start on the completion day. */
   startAfterDays: number;
   /** Repeating tasks only; empty = no end. */
@@ -478,6 +544,7 @@ export interface TaskTemplate {
   weekdays: number[];
   monthDay: number | null;
   intervalDays: number | null;
+  spacing: Spacing | null;
   startAfterDays: number;
   durationDays: number | null;
   active: boolean;
@@ -681,7 +748,18 @@ export const tasksApi = {
   create: (data: TaskInput) => api<{ id: string }[]>("/api/tasks", { method: "POST", body: data }),
   list: (q: { scope?: "mine" | "assigned" | "all"; assigneeId?: string; subjectId?: string } = {}) =>
     api<TaskDetail[]>(`/api/tasks${qs(q)}`),
-  get: (id: string) => api<TaskDetail & { occurrences: { id: string; dueDate: string; status: OccurrenceStatus }[] }>(`/api/tasks/${id}`),
+  get: (id: string) =>
+    api<
+      TaskDetail & {
+        occurrences: { id: string; dueDate: string; status: OccurrenceStatus }[];
+        plan: PlanItem[];
+        planSummary: Record<PlanStatus, number> & { total: number };
+      }
+    >(`/api/tasks/${id}`),
+  calendar: (from: string, to: string) =>
+    api<{ today: string; from: string; to: string; items: CalendarItem[] }>(`/api/tasks/calendar${qs({ from, to })}`),
+  spacingPreview: (spacing: SpacingInput, startDate?: string) =>
+    api<SpacingPreview>("/api/tasks/spacing-preview", { method: "POST", body: { spacing, startDate } }),
   update: (id: string, data: Partial<Omit<TaskInput, "subjectId" | "assignees">> & { active?: boolean }) =>
     api<TaskDetail>(`/api/tasks/${id}`, { method: "PUT", body: data }),
   remove: (id: string) => api(`/api/tasks/${id}`, { method: "DELETE" }),

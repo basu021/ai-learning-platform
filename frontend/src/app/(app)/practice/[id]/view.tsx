@@ -148,6 +148,7 @@ export default function PracticePage() {
               {occ.status.replace("_", " ").toLowerCase()}
             </span>
             <p className="mt-2 text-xs text-gray-500">Due {formatDay(occ.dueDate)}</p>
+            {occ.session && <p className="mt-1 text-xs text-indigo-300">Practice {occ.session.n} of {occ.session.of}</p>}
           </div>
         </div>
         <Link href={studyHref} className="inline-flex items-center gap-1.5 text-sm text-indigo-400 hover:underline">

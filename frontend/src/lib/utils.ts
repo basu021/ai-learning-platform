@@ -46,6 +46,7 @@ export function getStatusColor(status: string): string {
     IN_PROGRESS: "bg-yellow-500/20 text-yellow-300 border border-yellow-500/30",
     COMPLETED: "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30",
     SKIPPED: "bg-gray-500/10 text-gray-500 border border-gray-600/30",
+    OVERDUE: "bg-red-500/15 text-red-300 border border-red-500/30",
   };
   return colors[status] || "bg-gray-500/20 text-gray-400";
 }
@@ -72,6 +73,13 @@ export function formatBytes(bytes: number): string {
 export function localDate(d = new Date()): string {
   const off = d.getTimezoneOffset() * 60000;
   return new Date(d.getTime() - off).toISOString().slice(0, 10);
+}
+
+/** "YYYY-MM-DD" plus n days. */
+export function addDays(ymd: string, n: number): string {
+  const d = new Date(`${ymd}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
 }
 
 export function formatDay(ymd: string): string {

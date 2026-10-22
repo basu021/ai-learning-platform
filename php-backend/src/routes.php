@@ -96,6 +96,8 @@ function register_routes(Router $r): void
     $r->post('/api/tasks', fn(Request $q) => Tasks::create($q->user, $q->body()));
     $r->get('/api/tasks', fn(Request $q) => Tasks::list($q->user, $q->query));
     $r->get('/api/tasks/agenda', fn(Request $q) => Tasks::agenda($q->user['id']));
+    $r->get('/api/tasks/calendar', fn(Request $q) => Tasks::calendar($q->user, $q->query));
+    $r->post('/api/tasks/spacing-preview', fn(Request $q) => Spacing::preview($q->body()));
     $r->get('/api/tasks/history', fn(Request $q) => Tasks::history($q->user, $q->q('userId') ?: $q->user['id']));
     $r->get('/api/tasks/occurrences/:id', fn(Request $q) => Tasks::getOccurrence($q->user, $q->param('id')));
     $r->post('/api/tasks/occurrences/:id/start', fn(Request $q) => Tasks::start($q->user, $q->param('id')));

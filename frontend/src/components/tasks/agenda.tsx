@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { CheckCircle2, Play, Repeat, ShieldCheck, Clock } from "lucide-react";
-import type { OccurrenceItem, TaskLite } from "@/lib/api";
+import type { OccurrenceItem, SessionNo, TaskLite } from "@/lib/api";
 import { Breadcrumb } from "@/components/content/breadcrumb";
 import { cn, formatDay, getDifficultyColor, getStatusColor } from "@/lib/utils";
 
@@ -18,15 +18,31 @@ export function TaskMeta({ task }: { task: TaskLite }) {
   );
 }
 
+/** "3 of 7" for a session of a spaced task. */
+export function SessionBadge({ session, className }: { session?: SessionNo | null; className?: string }) {
+  if (!session) return null;
+  return (
+    <span
+      title={`Practice ${session.n} of ${session.of}`}
+      className={cn("shrink-0 rounded-full border border-indigo-500/30 bg-indigo-500/10 px-1.5 py-px text-[10px] font-medium text-indigo-300", className)}
+    >
+      {session.n} of {session.of}
+    </span>
+  );
+}
+
 export function OccurrenceRow({ item, showDate }: { item: OccurrenceItem; showDate?: boolean }) {
   const done = item.status === "COMPLETED" || item.status === "SKIPPED";
   return (
     <div className={cn("flex items-center gap-3 rounded-lg border border-gray-800 bg-gray-900/40 p-3 transition-colors hover:border-gray-700", done && "opacity-60")}>
       <span className="h-8 w-1 shrink-0 rounded-full" style={{ background: item.task.subject.color || "#6366f1" }} />
       <div className="min-w-0 flex-1 space-y-1">
-        <Link href={`/practice/${item.id}`} className="block truncate text-sm font-medium text-gray-100 hover:text-indigo-300">
-          {item.task.title}
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href={`/practice/${item.id}`} className="truncate text-sm font-medium text-gray-100 hover:text-indigo-300">
+            {item.task.title}
+          </Link>
+          <SessionBadge session={item.session} />
+        </div>
         <Breadcrumb items={item.task.breadcrumb} linked={false} />
         <TaskMeta task={item.task} />
       </div>
@@ -48,9 +64,9 @@ export function OccurrenceRow({ item, showDate }: { item: OccurrenceItem; showDa
   );
 }
 
-export function UpcomingList({ items }: { items: { dueDate: string; task: TaskLite }[] }) {
-  const byDay = new Map<string, TaskLite[]>();
-  items.forEach((u) => byDay.set(u.dueDate, [...(byDay.get(u.dueDate) ?? []), u.task]));
+export function UpcomingList({ items }: { items: { dueDate: string; session?: SessionNo | null; task: TaskLite }[] }) {
+  const byDay = new Map<string, (TaskLite & { session?: SessionNo | null })[]>();
+  items.forEach((u) => byDay.set(u.dueDate, [...(byDay.get(u.dueDate) ?? []), { ...u.task, session: u.session }]));
   return (
     <div className="space-y-4">
       {[...byDay.entries()].map(([day, tasks]) => (
@@ -61,7 +77,10 @@ export function UpcomingList({ items }: { items: { dueDate: string; task: TaskLi
               <div key={t.id} className="flex items-center gap-3 rounded-lg border border-gray-800/70 px-3 py-2">
                 <span className="h-6 w-1 shrink-0 rounded-full" style={{ background: t.subject.color || "#6366f1" }} />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm text-gray-200">{t.title}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="truncate text-sm text-gray-200">{t.title}</p>
+                    <SessionBadge session={t.session} />
+                  </div>
                   <Breadcrumb items={t.breadcrumb} linked={false} />
                 </div>
                 <span className="hidden text-[11px] text-gray-500 sm:block">{t.scheduleLabel}</span>

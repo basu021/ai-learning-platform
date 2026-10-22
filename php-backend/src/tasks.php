@@ -1,9 +1,150 @@
 <?php
 declare(strict_types=1);
 
+// ---------------------------------------------------------------- spacing
+// Spaced repetition: practice often at first, then less and less. The plan
+// is a list of day numbers (day 1 = the start date), generated once from a
+// gap pattern and stored with the task, so it never shifts later.
+
+final class Spacing
+{
+    public const PATTERNS = ['EXPONENTIAL', 'FIBONACCI', 'LINEAR', 'FIXED', 'CUSTOM'];
+    private const MAX_DAY = 3650;
+
+    public static function spec(): array
+    {
+        return [
+            'pattern' => ['in' => self::PATTERNS],
+            'repetitions' => ['optional', 'int', 'gte' => 2, 'lte' => 100],
+            'firstGap' => ['optional', 'int', 'gte' => 1, 'lte' => 365],
+            'growth' => ['optional', 'gte' => 0, 'lte' => 10],
+            'maxGap' => ['optional', 'int', 'gte' => 1, 'lte' => 365],
+            'maxDays' => ['optional', 'int', 'gte' => 1, 'lte' => self::MAX_DAY],
+            'days' => ['optional', 'array', 'arrmax' => 100, 'each' => 'int', 'eachgte' => 1, 'eachlte' => self::MAX_DAY],
+        ];
+    }
+
+    /**
+     * Normalised settings plus the generated `days`.
+     * Gaps never shrink; maxGap caps a gap, maxDays ends the plan early.
+     */
+    public static function build(array $s): array
+    {
+        $p = $s['pattern'];
+        $maxDays = $s['maxDays'] ?? null;
+        if ($p === 'CUSTOM') {
+            $days = array_values($s['days'] ?? []);
+            if (!$days) bad_request('Enter the practice days, e.g. 1, 3, 5, 9');
+            for ($i = 1; $i < count($days); $i++) {
+                if ($days[$i] <= $days[$i - 1]) bad_request('Practice days must go up, e.g. 1, 3, 5, 9');
+            }
+            if ($maxDays) $days = array_values(array_filter($days, fn($d) => $d <= $maxDays));
+            if (!$days) bad_request('No practice day falls within the total length');
+            return ['pattern' => $p, 'repetitions' => count($days), 'firstGap' => null, 'growth' => null, 'maxGap' => null, 'maxDays' => $maxDays, 'days' => $days];
+        }
+
+        $reps = $s['repetitions'] ?? bad_request('Set how many times it repeats');
+        $first = $s['firstGap'] ?? ($p === 'FIXED' ? 2 : 1);
+        $growth = match ($p) {
+            'EXPONENTIAL' => $s['growth'] ?? 2,
+            'LINEAR' => $s['growth'] ?? 1,
+            default => null,
+        };
+        if ($p === 'EXPONENTIAL' && $growth < 1) bad_request('Growth must be at least 1 (1 keeps the gap the same)');
+        $maxGap = $s['maxGap'] ?? null;
+
+        $days = [1];
+        $day = 1;
+        $prev = 0;
+        [$fa, $fb] = [1, 1];
+        for ($k = 1; count($days) < $reps; $k++) {
+            $raw = match ($p) {
+                'EXPONENTIAL' => $first * $growth ** ($k - 1),
+                'FIBONACCI' => $first * $fa,
+                'LINEAR' => $first + $growth * ($k - 1),
+                'FIXED' => $first,
+            };
+            if ($p === 'FIBONACCI') [$fa, $fb] = [$fb, $fa + $fb];
+            $gap = max(1, $prev, js_round(min((float) $raw, self::MAX_DAY)));
+            if ($maxGap) $gap = min($gap, $maxGap);
+            $day += $gap;
+            if ($day > self::MAX_DAY || ($maxDays && $day > $maxDays)) break;
+            $days[] = $day;
+            $prev = $gap;
+        }
+        return ['pattern' => $p, 'repetitions' => $reps, 'firstGap' => $first, 'growth' => $growth, 'maxGap' => $maxGap, 'maxDays' => $maxDays, 'days' => $days];
+    }
+
+    /** Stored JSON (decoded as an object) to an array. */
+    public static function of(mixed $spacing): ?array
+    {
+        if ($spacing === null) return null;
+        $a = json_decode(json_encode($spacing), true);
+        return is_array($a) && !empty($a['days']) ? $a : null;
+    }
+
+    public static function days(array $r): array
+    {
+        return array_map('intval', self::of($r['spacing'] ?? null)['days'] ?? []);
+    }
+
+    public static function dateOf(string $start, int $day): string
+    {
+        return add_days($start, $day - 1);
+    }
+
+    /** Which session (1-based) a due date is in the plan, or null. */
+    public static function sessionOf(array $r, string $due): ?array
+    {
+        if (($r['frequency'] ?? null) !== 'SPACED') return null;
+        $days = self::days($r);
+        $i = array_search(diff_days($due, ymd($r['startDate'])) + 1, $days, true);
+        return $i === false ? null : ['n' => $i + 1, 'of' => count($days)];
+    }
+
+    private static function num(int|float $n): string
+    {
+        return rtrim(rtrim(number_format((float) $n, 2, '.', ''), '0'), '.');
+    }
+
+    /** e.g. "Spaced ×2: 7 times over 64 days". */
+    public static function label(?array $sp): string
+    {
+        if (!$sp) return 'Spaced repetition';
+        $days = $sp['days'];
+        $kind = match ($sp['pattern']) {
+            'EXPONENTIAL' => 'Spaced ×' . self::num($sp['growth']),
+            'FIBONACCI' => 'Spaced (Fibonacci)',
+            'LINEAR' => 'Spaced (+' . self::num($sp['growth']) . ' day' . ($sp['growth'] == 1 ? '' : 's') . ' each time)',
+            'FIXED' => 'Every ' . $sp['firstGap'] . ' days',
+            default => 'Spaced (days ' . implode(', ', array_slice($days, 0, 5)) . (count($days) > 5 ? '…' : '') . ')',
+        };
+        $n = count($days);
+        return "$kind: $n time" . ($n === 1 ? '' : 's') . ' over ' . end($days) . ' day' . (end($days) === 1 ? '' : 's');
+    }
+
+    /** What the form shows before saving: day numbers, gaps and (with a start) dates. */
+    public static function preview(array $body): array
+    {
+        $dto = V::check($body, ['spacing' => ['nested' => self::spec()], 'startDate' => ['optional', 'date']]);
+        $sp = self::build($dto['spacing']);
+        $start = !empty($dto['startDate']) ? substr($dto['startDate'], 0, 10) : null;
+        $sessions = [];
+        foreach ($sp['days'] as $i => $d) {
+            $sessions[] = [
+                'n' => $i + 1,
+                'day' => $d,
+                'gap' => $i ? $d - $sp['days'][$i - 1] : 0,
+                'date' => $start ? self::dateOf($start, $d) : null,
+            ];
+        }
+        return ['spacing' => $sp, 'label' => self::label($sp), 'totalDays' => end($sp['days']), 'sessions' => $sessions];
+    }
+}
+
 // --------------------------------------------------------------- schedule
-// A rule is frequency, weekdays ("0,3"), monthDay, intervalDays, startDate
-// and endDate ('Y-m-d' or null).
+// A rule is frequency, weekdays ("0,3"), monthDay, intervalDays, spacing,
+// startDate and endDate ('Y-m-d' or null).
 
 final class Schedule
 {
@@ -16,6 +157,7 @@ final class Schedule
             'weekdays' => $t['weekdays'] ?? null,
             'monthDay' => $t['monthDay'] ?? null,
             'intervalDays' => $t['intervalDays'] ?? null,
+            'spacing' => $t['spacing'] ?? null,
             'startDate' => ymd($t['startDate']),
             'endDate' => ymd($t['endDate'] ?? null),
         ];
@@ -37,6 +179,7 @@ final class Schedule
             'WEEKLY' => in_array(week_day($day), self::weekdayList($r['weekdays']), true),
             'MONTHLY' => month_day($day) === min($r['monthDay'] ?? 1, days_in_month($day)),
             'CUSTOM' => diff_days($day, $r['startDate']) % max(1, $r['intervalDays'] ?? 1) === 0,
+            'SPACED' => in_array(diff_days($day, $r['startDate']) + 1, Spacing::days($r), true),
             default => false,
         };
     }
@@ -52,6 +195,13 @@ final class Schedule
 
     public static function next(array $r, string $after, int $horizonDays = 400): ?string
     {
+        if ($r['frequency'] === 'SPACED') {
+            foreach (Spacing::days($r) as $d) {
+                $date = Spacing::dateOf($r['startDate'], $d);
+                if ($date >= $after) return $date;
+            }
+            return null;
+        }
         $start = $after < $r['startDate'] ? $r['startDate'] : $after;
         for ($i = 0; $i <= $horizonDays; $i++) {
             $d = add_days($start, $i);
@@ -69,6 +219,7 @@ final class Schedule
             'WEEKLY' => 'Weekly on ' . implode(', ', array_map(fn($d) => self::DAY_NAMES[$d] ?? '', self::weekdayList($r['weekdays']))),
             'MONTHLY' => 'Monthly on day ' . ($r['monthDay'] ?? 'null'),
             'CUSTOM' => $r['intervalDays'] === 1 ? 'Every day' : 'Every ' . ($r['intervalDays'] ?? 'null') . ' days',
+            'SPACED' => Spacing::label(Spacing::of($r['spacing'] ?? null)),
             default => '',
         };
     }
@@ -163,6 +314,7 @@ final class Tasks
             'weekdays' => ['optional', 'array', 'each' => 'int', 'eachgte' => 0, 'eachlte' => 6],
             'monthDay' => ['optional', 'int', 'gte' => 1, 'lte' => 31],
             'intervalDays' => ['optional', 'int', 'gte' => 1, 'lte' => 365],
+            'spacing' => ['optional', 'nested' => Spacing::spec()],
             'startDate' => ['date'],
             'endDate' => ['optional', 'date'],
         ];
@@ -189,9 +341,16 @@ final class Tasks
             'weekdays' => null,
             'monthDay' => null,
             'intervalDays' => null,
+            'spacing' => null,
             'startDate' => $start,
             'endDate' => $s['frequency'] === 'ONCE' ? null : $end,
         ];
+        if ($s['frequency'] === 'SPACED') {
+            if (empty($s['spacing'])) bad_request('Choose how the practice is spaced');
+            $rule['spacing'] = Spacing::build($s['spacing']);
+            // The plan has a fixed length, so it ends on its last session.
+            $rule['endDate'] = Spacing::dateOf($start, end($rule['spacing']['days']));
+        }
         if ($s['frequency'] === 'WEEKLY') {
             if (empty($s['weekdays'])) bad_request('Pick at least one weekday');
             $rule['weekdays'] = Schedule::weekdayString($s['weekdays']);
@@ -295,6 +454,7 @@ final class Tasks
         return array_map(fn($t) => [
             ...self::present($t, $user),
             'completedCount' => (int) $counts[$t['id']],
+            'totalSessions' => $t['frequency'] === 'SPACED' ? count(Spacing::days($t)) : null,
             'nextDue' => $t['active'] ? Schedule::next(Schedule::ruleOf($t), $today) : null,
         ], $tasks);
     }
@@ -316,7 +476,104 @@ final class Tasks
             ...$o,
             'feedback' => Db::rows('feedback', 'SELECT * FROM feedback WHERE occurrence_id = ? ORDER BY created_at DESC LIMIT 1', [$o['id']]),
         ], $occurrences);
-        return [...self::present($task, $user), 'occurrences' => $occurrences];
+        $plan = self::plan($task);
+        $summary = ['total' => count($plan), 'COMPLETED' => 0, 'SKIPPED' => 0, 'IN_PROGRESS' => 0, 'OVERDUE' => 0, 'PENDING' => 0];
+        foreach ($plan as $p) $summary[$p['status']]++;
+        return [...self::present($task, $user), 'occurrences' => $occurrences, 'plan' => $plan, 'planSummary' => $summary];
+    }
+
+    /** Overdue = due before today and not done. Future and today's undone practice is pending. */
+    private static function statusOn(string $date, ?string $stored, string $today): string
+    {
+        if ($stored && $stored !== 'PENDING') return $stored;
+        return $date < $today ? 'OVERDUE' : 'PENDING';
+    }
+
+    /**
+     * Every planned date with its status: the whole plan for a spaced task,
+     * otherwise recent history plus the next 10 dates.
+     */
+    public static function plan(array $t): array
+    {
+        $today = today();
+        $rule = Schedule::ruleOf($t);
+        $spaced = $t['frequency'] === 'SPACED';
+        $rows = Db::rows(
+            'task_occurrences',
+            'SELECT id, due_date, status, completed_at FROM task_occurrences WHERE task_id = ? ORDER BY due_date DESC LIMIT ' . ($spaced ? 200 : 30),
+            [$t['id']],
+        );
+        $byDate = [];
+        foreach ($rows as $r) $byDate[ymd($r['dueDate'])] = $r;
+
+        $dates = array_keys($byDate);
+        if ($spaced) {
+            foreach (Spacing::days($rule) as $d) $dates[] = Spacing::dateOf($rule['startDate'], $d);
+        } elseif ($t['active']) {
+            for ($i = 0, $d = $today; $i < 10 && ($n = Schedule::next($rule, $d)); $i++, $d = add_days($n, 1)) $dates[] = $n;
+        }
+        $dates = array_values(array_unique($dates));
+        sort($dates);
+
+        $out = [];
+        $prevDay = null;
+        foreach ($dates as $date) {
+            $row = $byDate[$date] ?? null;
+            $session = Spacing::sessionOf($rule, $date);
+            $day = $spaced ? diff_days($date, $rule['startDate']) + 1 : null;
+            $out[] = [
+                'date' => $date,
+                'session' => $session,
+                'day' => $day,
+                'gap' => $session && $prevDay !== null ? $day - $prevDay : null,
+                'status' => self::statusOn($date, $row['status'] ?? null, $today),
+                'occurrenceId' => $row['id'] ?? null,
+                'completedAt' => $row['completedAt'] ?? null,
+            ];
+            if ($session) $prevDay = $day;
+        }
+        return $out;
+    }
+
+    /** The signed-in user's practice per day, for a calendar (stored up to today, planned after). */
+    public static function calendar(array $user, array $query): array
+    {
+        $q = V::check($query, ['from' => ['date'], 'to' => ['date']]);
+        $from = substr($q['from'], 0, 10);
+        $to = substr($q['to'], 0, 10);
+        if ($to < $from || diff_days($to, $from) > 62) bad_request('Pick a range of up to 62 days');
+        self::ensureOccurrences($user['id']);
+        $today = today();
+
+        $items = [];
+        $rows = self::withTasks(Db::rows(
+            'task_occurrences',
+            'SELECT o.* FROM task_occurrences o JOIN tasks t ON t.id = o.task_id
+             WHERE o.user_id = ? AND o.due_date BETWEEN ? AND ? AND t.deleted_at IS NULL ORDER BY o.due_date, o.created_at',
+            [$user['id'], $from, $to],
+        ));
+        foreach ($rows as $o) {
+            $date = ymd($o['dueDate']);
+            $items[] = [
+                'date' => $date,
+                'occurrenceId' => $o['id'],
+                'status' => self::statusOn($date, $o['status'], $today),
+                'session' => Spacing::sessionOf(Schedule::ruleOf($o['task']), $date),
+                'task' => self::presentLite($o['task']),
+            ];
+        }
+        $futureFrom = max($from, add_days($today, 1));
+        if ($futureFrom <= $to) {
+            $active = Refs::withTaskRefs(Db::rows('tasks', 'SELECT * FROM tasks WHERE assignee_id = ? AND active = 1 AND deleted_at IS NULL', [$user['id']]));
+            foreach ($active as $t) {
+                $rule = Schedule::ruleOf($t);
+                foreach (Schedule::datesBetween($rule, $futureFrom, $to) as $d) {
+                    $items[] = ['date' => $d, 'occurrenceId' => null, 'status' => 'PENDING', 'session' => Spacing::sessionOf($rule, $d), 'task' => self::presentLite($t)];
+                }
+            }
+        }
+        usort($items, fn($a, $b) => strcmp($a['date'], $b['date']));
+        return ['today' => $today, 'from' => $from, 'to' => $to, 'items' => $items];
     }
 
     public static function update(array $user, string $id, array $body): array
@@ -459,7 +716,7 @@ final class Tasks
         $upcoming = [];
         foreach ($active as $t) {
             foreach (Schedule::datesBetween(Schedule::ruleOf($t), add_days($today, 1), add_days($today, self::UPCOMING_DAYS)) as $d) {
-                $upcoming[] = ['dueDate' => $d, 'task' => self::presentLite($t)];
+                $upcoming[] = ['dueDate' => $d, 'session' => Spacing::sessionOf(Schedule::ruleOf($t), $d), 'task' => self::presentLite($t)];
             }
         }
         usort($upcoming, fn($a, $b) => strcmp($a['dueDate'], $b['dueDate']));
@@ -469,6 +726,7 @@ final class Tasks
             'status' => $o['status'],
             'dueDate' => ymd($o['dueDate']),
             'completedAt' => $o['completedAt'],
+            'session' => Spacing::sessionOf(Schedule::ruleOf($o['task']), ymd($o['dueDate'])),
             'task' => self::presentLite($o['task']),
         ];
         return [
@@ -495,6 +753,7 @@ final class Tasks
         return [
             ...$occ,
             'dueDate' => ymd($occ['dueDate']),
+            'session' => Spacing::sessionOf(Schedule::ruleOf($occ['task']), ymd($occ['dueDate'])),
             'task' => self::present($occ['task'], $user),
             'previousFeedback' => $history,
         ];
@@ -583,6 +842,7 @@ final class Templates
             'weekdays' => ['optional', 'array', 'each' => 'int', 'eachgte' => 0, 'eachlte' => 6],
             'monthDay' => ['optional', 'int', 'gte' => 1, 'lte' => 31],
             'intervalDays' => ['optional', 'int', 'gte' => 1, 'lte' => 365],
+            'spacing' => ['optional', 'nested' => Spacing::spec()],
             'startAfterDays' => ['int', 'gte' => 0, 'lte' => 365],
             'durationDays' => ['optional', 'int', 'gte' => 1, 'lte' => 3650],
         ];
@@ -595,9 +855,14 @@ final class Templates
             'weekdays' => null,
             'monthDay' => null,
             'intervalDays' => null,
+            'spacing' => null,
             'startAfterDays' => $s['startAfterDays'],
-            'durationDays' => $s['frequency'] === 'ONCE' ? null : ($s['durationDays'] ?? null),
+            'durationDays' => in_array($s['frequency'], ['ONCE', 'SPACED'], true) ? null : ($s['durationDays'] ?? null),
         ];
+        if ($s['frequency'] === 'SPACED') {
+            if (empty($s['spacing'])) bad_request('Choose how the practice is spaced');
+            $rule['spacing'] = Spacing::build($s['spacing']);
+        }
         if ($s['frequency'] === 'WEEKLY') {
             if (empty($s['weekdays'])) bad_request('Pick at least one weekday');
             $rule['weekdays'] = Schedule::weekdayString($s['weekdays']);
@@ -620,6 +885,7 @@ final class Templates
     {
         $start = $t['startAfterDays'] ? self::days($t['startAfterDays']) . ' after completion' : 'on completion day';
         if ($t['frequency'] === 'ONCE') return "Once, $start";
+        if ($t['frequency'] === 'SPACED') return Spacing::label(Spacing::of($t['spacing'])) . ", from $start";
         $base = Schedule::describe([...$t, 'startDate' => '1970-01-01', 'endDate' => null]);
         return "$base, from $start" . ($t['durationDays'] ? ', for ' . self::days($t['durationDays']) : '');
     }
@@ -762,8 +1028,11 @@ final class Templates
                     'weekdays' => $t['weekdays'],
                     'monthDay' => $t['monthDay'],
                     'intervalDays' => $t['intervalDays'],
+                    'spacing' => $t['spacing'],
                     'startDate' => $start,
-                    'endDate' => $t['durationDays'] ? add_days($start, $t['durationDays'] - 1) : null,
+                    'endDate' => $t['frequency'] === 'SPACED'
+                        ? Spacing::dateOf($start, max(Spacing::days($t) ?: [1]))
+                        : ($t['durationDays'] ? add_days($start, $t['durationDays'] - 1) : null),
                 ], false);
             } catch (PDOException $e) {
                 // Unique (template, assignee): a concurrent completion already assigned it.

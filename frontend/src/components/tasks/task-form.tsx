@@ -9,6 +9,7 @@ import { useToast } from "@/components/ui/toast";
 import { RichEditor } from "@/components/editor/rich-editor";
 import { flattenOutline } from "@/components/content/outline-tree";
 import { UserPicker } from "@/components/users/user-picker";
+import { cleanSpacing, SPACING_PRESETS, SpacingFields } from "@/components/tasks/spacing-fields";
 import {
   subjectsApi,
   tasksApi,
@@ -23,7 +24,7 @@ import {
   type UserSummary,
 } from "@/lib/api";
 import { useSession } from "@/lib/auth";
-import { cn, localDate, NODE_LABEL } from "@/lib/utils";
+import { addDays, cn, localDate, NODE_LABEL } from "@/lib/utils";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const FREQS: { value: Frequency; label: string }[] = [
@@ -32,20 +33,26 @@ const FREQS: { value: Frequency; label: string }[] = [
   { value: "WEEKLY", label: "Weekly" },
   { value: "MONTHLY", label: "Monthly" },
   { value: "CUSTOM", label: "Every N days" },
+  { value: "SPACED", label: "Spaced repetition" },
 ];
 
-type RepeatValue = Pick<ScheduleInput, "frequency" | "weekdays" | "monthDay" | "intervalDays">;
+type RepeatValue = Pick<ScheduleInput, "frequency" | "weekdays" | "monthDay" | "intervalDays" | "spacing">;
 
-/** Frequency buttons plus the weekday / day-of-month / every-N-days settings. */
+/** Frequency buttons plus the weekday / day-of-month / every-N-days / spacing settings. */
 function RepeatFields<T extends RepeatValue>({
   value,
   onChange,
   refDate,
+  previewStart,
+  previewNote,
 }: {
   value: T;
   onChange: (s: T) => void;
   /** Used to pick a sensible weekday / day of month when switching frequency. */
   refDate: string;
+  /** First practice date, for the spaced repetition preview. */
+  previewStart?: string;
+  previewNote?: string;
 }) {
   const set = (patch: Partial<RepeatValue>) => onChange({ ...value, ...patch });
   const weekdays = value.weekdays ?? [];
@@ -62,6 +69,7 @@ function RepeatFields<T extends RepeatValue>({
                 weekdays: f.value === "WEEKLY" && !weekdays.length ? [new Date(`${refDate}T00:00:00`).getDay()] : value.weekdays,
                 intervalDays: f.value === "CUSTOM" ? value.intervalDays ?? 2 : value.intervalDays,
                 monthDay: f.value === "MONTHLY" ? value.monthDay ?? Number(refDate.slice(8, 10)) : value.monthDay,
+                spacing: f.value === "SPACED" ? value.spacing ?? SPACING_PRESETS[0].value : value.spacing,
               })
             }
             className={cn(
@@ -112,8 +120,27 @@ function RepeatFields<T extends RepeatValue>({
           </div>
         </Field>
       )}
+      {value.frequency === "SPACED" && (
+        <SpacingFields
+          value={value.spacing ?? SPACING_PRESETS[0].value}
+          onChange={(spacing) => set({ spacing })}
+          startDate={previewStart}
+          startNote={previewNote}
+        />
+      )}
     </>
   );
+}
+
+/** The schedule body for the API: only the fields that belong to the chosen frequency. */
+function scheduleBody<T extends RepeatValue>(s: T) {
+  return {
+    ...s,
+    weekdays: s.frequency === "WEEKLY" ? s.weekdays : undefined,
+    monthDay: s.frequency === "MONTHLY" ? s.monthDay : undefined,
+    intervalDays: s.frequency === "CUSTOM" ? s.intervalDays : undefined,
+    spacing: s.frequency === "SPACED" && s.spacing ? cleanSpacing(s.spacing) : undefined,
+  };
 }
 
 export function ScheduleFields({
@@ -126,12 +153,12 @@ export function ScheduleFields({
   const set = (patch: Partial<ScheduleInput>) => onChange({ ...value, ...patch });
   return (
     <div className="space-y-3 rounded-lg border border-gray-800 bg-gray-950/40 p-3">
-      <RepeatFields value={value} onChange={onChange} refDate={value.startDate} />
+      <RepeatFields value={value} onChange={onChange} refDate={value.startDate} previewStart={value.startDate} />
       <div className="grid grid-cols-2 gap-3">
-        <Field label={value.frequency === "ONCE" ? "Date" : "Starts"}>
+        <Field label={value.frequency === "ONCE" ? "Date" : value.frequency === "SPACED" ? "Starts (day 1)" : "Starts"}>
           <Input type="date" value={value.startDate} onChange={(e) => set({ startDate: e.target.value })} required />
         </Field>
-        {value.frequency !== "ONCE" && (
+        {value.frequency !== "ONCE" && value.frequency !== "SPACED" && (
           <Field label="Ends (optional)">
             <Input type="date" value={value.endDate ?? ""} min={value.startDate} onChange={(e) => set({ endDate: e.target.value || null })} />
           </Field>
@@ -152,7 +179,13 @@ function RelativeScheduleFields({
   const set = (patch: Partial<RelativeScheduleInput>) => onChange({ ...value, ...patch });
   return (
     <div className="space-y-3 rounded-lg border border-gray-800 bg-gray-950/40 p-3">
-      <RepeatFields value={value} onChange={onChange} refDate={localDate()} />
+      <RepeatFields
+        value={value}
+        onChange={onChange}
+        refDate={localDate()}
+        previewStart={addDays(localDate(), value.startAfterDays)}
+        previewNote={`if completed today (${value.startAfterDays ? `starts ${value.startAfterDays} day${value.startAfterDays === 1 ? "" : "s"} after` : "starts the same day"})`}
+      />
       <div className="grid grid-cols-2 gap-3">
         <Field label="Start" hint="0 = the day they complete it">
           <div className="flex items-center gap-2">
@@ -160,7 +193,7 @@ function RelativeScheduleFields({
             <span className="text-xs text-gray-400">days after</span>
           </div>
         </Field>
-        {value.frequency !== "ONCE" && (
+        {value.frequency !== "ONCE" && value.frequency !== "SPACED" && (
           <Field label="Run for (optional)" hint="Empty = no end">
             <div className="flex items-center gap-2">
               <Input type="number" min={1} max={3650} value={value.durationDays ?? ""} onChange={(e) => set({ durationDays: e.target.value ? Number(e.target.value) : null })} className="w-20" />
@@ -238,6 +271,7 @@ export function TaskFormModal({
         weekdays: template.weekdays,
         monthDay: template.monthDay ?? undefined,
         intervalDays: template.intervalDays ?? undefined,
+        spacing: template.spacing ?? undefined,
         startAfterDays: template.startAfterDays,
         durationDays: template.durationDays,
       });
@@ -254,6 +288,7 @@ export function TaskFormModal({
         weekdays: task.weekdays,
         monthDay: task.monthDay ?? undefined,
         intervalDays: task.intervalDays ?? undefined,
+        spacing: task.spacing ?? undefined,
         startDate: task.startDate,
         endDate: task.endDate,
       });
@@ -317,23 +352,11 @@ export function TaskFormModal({
     };
     const body = {
       ...common,
-      // Send only the fields that belong to the chosen frequency.
-      schedule: {
-        frequency: schedule.frequency,
-        startDate: schedule.startDate,
-        endDate: schedule.endDate,
-        weekdays: schedule.frequency === "WEEKLY" ? schedule.weekdays : undefined,
-        monthDay: schedule.frequency === "MONTHLY" ? schedule.monthDay : undefined,
-        intervalDays: schedule.frequency === "CUSTOM" ? schedule.intervalDays : undefined,
-      },
+      schedule: { ...scheduleBody(schedule), endDate: schedule.frequency === "SPACED" ? undefined : schedule.endDate },
     };
     const relSchedule: RelativeScheduleInput = {
-      frequency: rel.frequency,
-      startAfterDays: rel.startAfterDays,
-      durationDays: rel.frequency === "ONCE" ? null : rel.durationDays ?? null,
-      weekdays: rel.frequency === "WEEKLY" ? rel.weekdays : undefined,
-      monthDay: rel.frequency === "MONTHLY" ? rel.monthDay : undefined,
-      intervalDays: rel.frequency === "CUSTOM" ? rel.intervalDays : undefined,
+      ...scheduleBody(rel),
+      durationDays: rel.frequency === "ONCE" || rel.frequency === "SPACED" ? null : rel.durationDays ?? null,
     };
     try {
       if (auto) {

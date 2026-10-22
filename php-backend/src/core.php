@@ -159,6 +159,8 @@ final class Db
     private const JSONS = [
         'change_requests' => ['payload'],
         'content_revisions' => ['snapshot'],
+        'task_templates' => ['spacing'],
+        'tasks' => ['spacing'],
     ];
     /** Columns Prisma fills with now() on insert. */
     private const NOW_ON_INSERT = [
@@ -396,7 +398,7 @@ final class V
 {
     public const USERNAME = ['/^[a-z0-9_.-]{3,30}$/', 'username must be 3-30 characters: lowercase letters, numbers, dot, dash or underscore'];
     public const DIFFICULTY = ['beginner', 'intermediate', 'advanced', 'expert'];
-    public const FREQUENCY = ['ONCE', 'DAILY', 'WEEKLY', 'MONTHLY', 'CUSTOM'];
+    public const FREQUENCY = ['ONCE', 'DAILY', 'WEEKLY', 'MONTHLY', 'CUSTOM', 'SPACED'];
 
     public static function check(mixed $input, array $spec): array
     {
