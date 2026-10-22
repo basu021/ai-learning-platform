@@ -32,6 +32,8 @@ This topic has two short pages:
 1. **What a storage engine is**, and why many databases let you swap it.
 2. **How to choose a database**, with benchmarks that help.
 
+[https://www.youtube.com/watch?v=K4YMuDzbu_E](https://www.youtube.com/watch?v=K4YMuDzbu_E)
+
 @subtopic What is a storage engine?
 @summary The low-level component that stores, reads, updates and deletes data.
 
