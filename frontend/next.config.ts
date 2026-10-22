@@ -1,8 +1,9 @@
 import type { NextConfig } from "next";
 
-// `next build` makes a static site in out/ for plain web hosting (Hostinger).
-// The Docker image sets NEXT_OUTPUT=server to run `next start` instead.
-const server = process.env.NEXT_OUTPUT === "server";
+// Default: a Next.js server build (`next start`), used by Docker and by
+// Node.js hosting such as Hostinger Web Apps. NEXT_OUTPUT=export instead
+// makes a static site in out/ for plain file hosting (Apache/LiteSpeed).
+const staticExport = process.env.NEXT_OUTPUT === "export";
 
 // Embedded images are stored as relative /api/attachments/... URLs so content
 // keeps working if the public API address changes. The server build proxies
@@ -10,14 +11,14 @@ const server = process.env.NEXT_OUTPUT === "server";
 const apiInternal =
   process.env.API_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
-const nextConfig: NextConfig = server
-  ? {
+const nextConfig: NextConfig = staticExport
+  ? { output: "export", trailingSlash: true }
+  : {
       async rewrites() {
         return [
           { source: "/api/attachments/:path*", destination: `${apiInternal}/api/attachments/:path*` },
         ];
       },
-    }
-  : { output: "export", trailingSlash: true };
+    };
 
 export default nextConfig;

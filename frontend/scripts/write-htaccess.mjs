@@ -1,4 +1,4 @@
-// After a static build, writes out/.htaccess for Apache/LiteSpeed hosting:
+// After a static build (NEXT_OUTPUT=export), writes out/.htaccess for Apache/LiteSpeed hosting:
 // - each dynamic route is exported once as "_"; serve it for every id
 // - /api/... (images embedded in lessons) goes to the API server
 import { existsSync, writeFileSync } from "node:fs";
